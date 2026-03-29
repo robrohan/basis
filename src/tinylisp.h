@@ -56,7 +56,7 @@ extern L cell[N];
 extern tensor_t tensor_heap[MAX_TENSORS];
 extern L nil, tru, err, env;
 struct prims { const char *s; L (*f)(L, L); };
-struct prims prim[MAX_PRIMS];
+extern struct prims prim[MAX_PRIMS];
 extern int prim_count;
 
 L box(I t, I i);
@@ -120,7 +120,6 @@ L f_define(L t, L e);
 L bind(L v, L t, L e);
 L reduce(L f, L t, L e);
 L apply(L f, L t, L e);
-L eval(L x, L e);
 
 L parse(void);
 L Read(void);

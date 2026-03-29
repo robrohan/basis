@@ -30,7 +30,7 @@ L nil, tru, err, env;
    equ(x,y): returns nonzero if x equals y */
 L box(I t, I i)
 {
-    L x;
+    L x = 0;
     *(uint64_t *)&x = (uint64_t)t << 48 | i;
     return x;
 }
