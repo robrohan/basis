@@ -7,9 +7,12 @@ kanban-plugin: board
 ## 🧊 Backlog
 
 - [ ] (slice [[10 20 40]] 1) returns [0 0 0] is that right?
+- [ ] (define R [ [(+ 3 x) x ] [ x (+ 3 x)] ]) returns [[nan nan 3 nan nan nan] [nan nan nan 3 nan nan]] sub expressions should parse
 - [ ] Format output of a matrix in a way that is eaiser to read
-- [ ] Somehow run the repl so it just outputs once? 
-- [ ] Run it in a loop with a main?
+- [ ] Somehow run the repl so it just outputs once. When you pipe a file into the binary it outputs many ERRs using the file flag -f sometimes hangs and doesn't display helpful errors. For example `./build/Darwin/arm64/basis.debug -f ./test_data/matrix2_test.lisp`
+- [ ] How to make a service
+- [ ] add maths functions sinf, cosf, etc
+- [ ] add `include`, `require` or `import` to parse other files and use functions etc in those files
 
 ## 📝 Todo
 
