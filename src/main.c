@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
             file = optarg;
             break;
         default:
-            fprintf(stderr, "usage: tensp [-f file.lisp]\n");
+            fprintf(stderr, "usage: basis [-f file.lisp]\n");
             return 1;
         }
     }
@@ -40,13 +40,13 @@ int main(int argc, char *argv[])
         FILE *fp = fopen(file, "r");
         if (!fp)
         {
-            fprintf(stderr, "tensp: cannot open '%s'\n", file);
+            fprintf(stderr, "basis: cannot open '%s'\n", file);
             return 1;
         }
         if (dup2(fileno(fp), fileno(stdin)) < 0)
         {
             fclose(fp);
-            fprintf(stderr, "tensp: cannot redirect '%s'\n", file);
+            fprintf(stderr, "basis: cannot redirect '%s'\n", file);
             return 1;
         }
         /* clear any cached tty state so getchar() reads from the file fd */
@@ -66,7 +66,8 @@ int main(int argc, char *argv[])
     }
 
     /* REPL */
-    printf("tensp");
+    printf("basis\n");
+    printf("ctrl+d to quit\n");
     while (1)
     {
         printf("\n%u> ", sp - hp / 8);

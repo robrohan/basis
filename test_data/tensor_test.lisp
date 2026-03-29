@@ -1,5 +1,5 @@
 ; tensor_test.lisp — smoke tests for tensor literals and primitives
-; Run with: echo '...' | ./build/Darwin/arm64/tensp.debug
+; Run with: echo '...' | ./build/Darwin/arm64/basis.debug
 ; or load interactively at the REPL
 
 ; ---- tensor literals ----

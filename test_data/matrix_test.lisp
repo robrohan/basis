@@ -1,6 +1,6 @@
 ; matrix_test.lisp — examples of matrix literals and operations
 ; Run any expression with:
-;   printf '<expr>\n' | ./build/Darwin/arm64/tensp.debug
+;   printf '<expr>\n' | ./build/Darwin/arm64/basis.debug
 
 ; ---- matrix literals ----
 [[1 2 3] [4 5 6]]

@@ -1,7 +1,7 @@
 .PHONY: build
 
 CC=gcc
-APP=tensp
+APP=basis
 
 PLATFORM:=$(shell uname -s)
 CPU:=$(shell uname -m)
