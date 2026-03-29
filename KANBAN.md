@@ -6,6 +6,11 @@ kanban-plugin: board
 
 ## 🧊 Backlog
 
+- [ ] (slice [[10 20 40]] 1) returns [0 0 0] is that right?
+- [ ] Format output of a matrix in a way that is eaiser to read
+- [ ] Somehow run the repl so it just outputs once? 
+- [ ] Run it in a loop with a main?
+
 ## 📝 Todo
 
 ## 👨‍💻 Doing (0)
