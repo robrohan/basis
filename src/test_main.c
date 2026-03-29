@@ -545,6 +545,336 @@ static const char *test_eval_utf8_atoms(void)
 }
 
 /* -----------------------------------------------------------------------
+   tensor — helpers
+   --------------------------------------------------------------------- */
+
+/* Build a TENS L value from a flat float array inline */
+static L make_vec(I len, const float *data)
+{
+    I shape[1];
+    shape[0] = len;
+    return box(TENS, (I)(alloc_tensor(1, shape, len, data) - tensor_heap));
+}
+
+static L make_mat(I rows, I cols, const float *data)
+{
+    I shape[2];
+    shape[0] = rows;
+    shape[1] = cols;
+    return box(TENS, (I)(alloc_tensor(2, shape, rows * cols, data) - tensor_heap));
+}
+
+/* -----------------------------------------------------------------------
+   tensor — NaN-box tag
+   --------------------------------------------------------------------- */
+
+static const char *test_tens_tag(void)
+{
+    setup();
+    float d[] = {1.f, 2.f, 3.f};
+    L v = make_vec(3, d);
+    r2_assert("tensor has TENS tag", T(v) == TENS);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — tensor? predicate
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_predicate(void)
+{
+    setup();
+    float d[] = {1.f, 2.f};
+    L v = make_vec(2, d);
+    /* (tensor? v) => #t */
+    L expr_t = cons(atom("tensor?"), cons(v, nil));
+    r2_assert("(tensor? [1 2]) is tru",   equ(eval(expr_t, env), tru));
+    /* (tensor? 42) => () */
+    L expr_f = cons(atom("tensor?"), cons((L)42.0, nil));
+    r2_assert("(tensor? 42) is nil",      equ(eval(expr_f, env), nil));
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — shape and rank
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_shape_rank_vec(void)
+{
+    setup();
+    float d[] = {10.f, 20.f, 30.f};
+    L v = make_vec(3, d);
+
+    /* (rank v) => 1 */
+    L rank_expr = cons(atom("rank"), cons(v, nil));
+    r2_assert("rank of vec is 1", equ(eval(rank_expr, env), (L)1.0));
+
+    /* (shape v) => [3] */
+    L shape_expr = cons(atom("shape"), cons(v, nil));
+    L sh = eval(shape_expr, env);
+    r2_assert("shape of vec is TENS",        T(sh) == TENS);
+    r2_assert("shape[0] of [10 20 30] == 3", tensor_heap[ord(sh)].data[0] == 3.f);
+    return NULL;
+}
+
+static const char *test_tensor_shape_rank_mat(void)
+{
+    setup();
+    float d[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
+    L m = make_mat(2, 3, d);
+
+    /* (rank m) => 2 */
+    L rank_expr = cons(atom("rank"), cons(m, nil));
+    r2_assert("rank of 2x3 mat is 2", equ(eval(rank_expr, env), (L)2.0));
+
+    /* (shape m) => [2 3] */
+    L shape_expr = cons(atom("shape"), cons(m, nil));
+    L sh = eval(shape_expr, env);
+    r2_assert("shape[0] of 2x3 == 2", tensor_heap[ord(sh)].data[0] == 2.f);
+    r2_assert("shape[1] of 2x3 == 3", tensor_heap[ord(sh)].data[1] == 3.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — slice
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_slice_vec(void)
+{
+    setup();
+    float d[] = {10.f, 20.f, 30.f};
+    L v = make_vec(3, d);
+
+    L s0 = cons(atom("slice"), cons(v, cons((L)0.0, nil)));
+    L s1 = cons(atom("slice"), cons(v, cons((L)1.0, nil)));
+    L s2 = cons(atom("slice"), cons(v, cons((L)2.0, nil)));
+    r2_assert("slice 0 == 10", equ(eval(s0, env), (L)10.0));
+    r2_assert("slice 1 == 20", equ(eval(s1, env), (L)20.0));
+    r2_assert("slice 2 == 30", equ(eval(s2, env), (L)30.0));
+    return NULL;
+}
+
+static const char *test_tensor_slice_mat(void)
+{
+    setup();
+    /* [[1 2 3][4 5 6]] — slice 0 => [1 2 3], slice 1 => [4 5 6] */
+    float d[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
+    L m = make_mat(2, 3, d);
+
+    L row0_expr = cons(atom("slice"), cons(m, cons((L)0.0, nil)));
+    L row0 = eval(row0_expr, env);
+    r2_assert("row0 is TENS",      T(row0) == TENS);
+    r2_assert("row0 len == 3",     tensor_heap[ord(row0)].len == 3);
+    r2_assert("row0[0] == 1",      tensor_heap[ord(row0)].data[0] == 1.f);
+    r2_assert("row0[2] == 3",      tensor_heap[ord(row0)].data[2] == 3.f);
+
+    L row1_expr = cons(atom("slice"), cons(m, cons((L)1.0, nil)));
+    L row1 = eval(row1_expr, env);
+    r2_assert("row1[0] == 4",      tensor_heap[ord(row1)].data[0] == 4.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — element-wise arithmetic
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_add(void)
+{
+    setup();
+    float a[] = {1.f, 2.f, 3.f};
+    float b[] = {4.f, 5.f, 6.f};
+    L va = make_vec(3, a);
+    L vb = make_vec(3, b);
+
+    L expr = cons(atom("+"), cons(va, cons(vb, nil)));
+    L r = eval(expr, env);
+    r2_assert("vec add is TENS",    T(r) == TENS);
+    r2_assert("1+4 == 5",           tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("2+5 == 7",           tensor_heap[ord(r)].data[1] == 7.f);
+    r2_assert("3+6 == 9",           tensor_heap[ord(r)].data[2] == 9.f);
+    return NULL;
+}
+
+static const char *test_tensor_sub(void)
+{
+    setup();
+    float a[] = {10.f, 20.f, 30.f};
+    float b[] = {1.f,  2.f,  3.f};
+    L va = make_vec(3, a);
+    L vb = make_vec(3, b);
+
+    L expr = cons(atom("-"), cons(va, cons(vb, nil)));
+    L r = eval(expr, env);
+    r2_assert("10-1 == 9",  tensor_heap[ord(r)].data[0] == 9.f);
+    r2_assert("20-2 == 18", tensor_heap[ord(r)].data[1] == 18.f);
+    r2_assert("30-3 == 27", tensor_heap[ord(r)].data[2] == 27.f);
+    return NULL;
+}
+
+static const char *test_tensor_mul(void)
+{
+    setup();
+    float a[] = {2.f, 3.f, 4.f};
+    float b[] = {1.f, 2.f, 3.f};
+    L va = make_vec(3, a);
+    L vb = make_vec(3, b);
+
+    L expr = cons(atom("*"), cons(va, cons(vb, nil)));
+    L r = eval(expr, env);
+    r2_assert("2*1 == 2",   tensor_heap[ord(r)].data[0] == 2.f);
+    r2_assert("3*2 == 6",   tensor_heap[ord(r)].data[1] == 6.f);
+    r2_assert("4*3 == 12",  tensor_heap[ord(r)].data[2] == 12.f);
+    return NULL;
+}
+
+static const char *test_tensor_div(void)
+{
+    setup();
+    float a[] = {10.f, 20.f, 30.f};
+    float b[] = {2.f,  4.f,  5.f};
+    L va = make_vec(3, a);
+    L vb = make_vec(3, b);
+
+    L expr = cons(atom("/"), cons(va, cons(vb, nil)));
+    L r = eval(expr, env);
+    r2_assert("10/2 == 5",  tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("20/4 == 5",  tensor_heap[ord(r)].data[1] == 5.f);
+    r2_assert("30/5 == 6",  tensor_heap[ord(r)].data[2] == 6.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — scalar broadcast
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_scalar_broadcast(void)
+{
+    setup();
+    float d[] = {1.f, 2.f, 3.f};
+    L v = make_vec(3, d);
+
+    L add_expr = cons(atom("+"), cons(v, cons((L)10.0, nil)));
+    L ra = eval(add_expr, env);
+    r2_assert("broadcast + [0] == 11", tensor_heap[ord(ra)].data[0] == 11.f);
+    r2_assert("broadcast + [2] == 13", tensor_heap[ord(ra)].data[2] == 13.f);
+
+    L mul_expr = cons(atom("*"), cons(v, cons((L)2.0, nil)));
+    L rm = eval(mul_expr, env);
+    r2_assert("broadcast * [0] == 2",  tensor_heap[ord(rm)].data[0] == 2.f);
+    r2_assert("broadcast * [1] == 4",  tensor_heap[ord(rm)].data[1] == 4.f);
+    r2_assert("broadcast * [2] == 6",  tensor_heap[ord(rm)].data[2] == 6.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — matrix element-wise arithmetic
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_mat_add(void)
+{
+    setup();
+    float a[] = {1.f, 2.f, 3.f, 4.f};
+    float b[] = {10.f, 20.f, 30.f, 40.f};
+    L ma = make_mat(2, 2, a);
+    L mb = make_mat(2, 2, b);
+
+    L expr = cons(atom("+"), cons(ma, cons(mb, nil)));
+    L r = eval(expr, env);
+    r2_assert("mat add is TENS",     T(r) == TENS);
+    r2_assert("mat add rank == 2",   tensor_heap[ord(r)].rank == 2);
+    r2_assert("mat [0,0] == 11",     tensor_heap[ord(r)].data[0] == 11.f);
+    r2_assert("mat [1,1] == 44",     tensor_heap[ord(r)].data[3] == 44.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — define and use in expressions
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_define(void)
+{
+    setup();
+    float d[] = {3.f, 1.f, 4.f, 1.f, 5.f};
+    L v = make_vec(5, d);
+
+    /* (define pi-vec [3 1 4 1 5]) */
+    L def = cons(atom("define"), cons(atom("pi-vec"), cons(v, nil)));
+    eval(def, env);
+
+    /* (shape pi-vec) => [5] */
+    L shape_expr = cons(atom("shape"), cons(atom("pi-vec"), nil));
+    L sh = eval(shape_expr, env);
+    r2_assert("shape of pi-vec == [5]", tensor_heap[ord(sh)].data[0] == 5.f);
+
+    /* (slice pi-vec 2) => 4 */
+    L sl = cons(atom("slice"), cons(atom("pi-vec"), cons((L)2.0, nil)));
+    r2_assert("slice 2 of pi-vec == 4", equ(eval(sl, env), (L)4.0));
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — matmul
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_matmul_square(void)
+{
+    setup();
+    /* [[1 2][3 4]] * [[5 6][7 8]] = [[19 22][43 50]] */
+    float a[] = {1.f, 2.f, 3.f, 4.f};
+    float b[] = {5.f, 6.f, 7.f, 8.f};
+    L ma = make_mat(2, 2, a);
+    L mb = make_mat(2, 2, b);
+
+    L expr = cons(atom("matmul"), cons(ma, cons(mb, nil)));
+    L r = eval(expr, env);
+    r2_assert("matmul result is TENS",   T(r) == TENS);
+    r2_assert("matmul rank == 2",        tensor_heap[ord(r)].rank == 2);
+    r2_assert("[0,0] == 19",             tensor_heap[ord(r)].data[0] == 19.f);
+    r2_assert("[0,1] == 22",             tensor_heap[ord(r)].data[1] == 22.f);
+    r2_assert("[1,0] == 43",             tensor_heap[ord(r)].data[2] == 43.f);
+    r2_assert("[1,1] == 50",             tensor_heap[ord(r)].data[3] == 50.f);
+    return NULL;
+}
+
+static const char *test_tensor_matmul_rect(void)
+{
+    setup();
+    /* [[1 2 3][4 5 6]] (2x3) * [[7 8][9 10][11 12]] (3x2) = [[58 64][139 154]] */
+    float a[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
+    float b[] = {7.f, 8.f, 9.f, 10.f, 11.f, 12.f};
+    L ma = make_mat(2, 3, a);
+    L mb = make_mat(3, 2, b);
+
+    L expr = cons(atom("matmul"), cons(ma, cons(mb, nil)));
+    L r = eval(expr, env);
+    r2_assert("rect matmul shape[0] == 2", tensor_heap[ord(r)].shape[0] == 2);
+    r2_assert("rect matmul shape[1] == 2", tensor_heap[ord(r)].shape[1] == 2);
+    r2_assert("[0,0] == 58",               tensor_heap[ord(r)].data[0] == 58.f);
+    r2_assert("[0,1] == 64",               tensor_heap[ord(r)].data[1] == 64.f);
+    r2_assert("[1,0] == 139",              tensor_heap[ord(r)].data[2] == 139.f);
+    r2_assert("[1,1] == 154",              tensor_heap[ord(r)].data[3] == 154.f);
+    return NULL;
+}
+
+static const char *test_tensor_matmul_matvec(void)
+{
+    setup();
+    /* [[1 2 3][4 5 6]] (2x3) * [1 0 0] => [1 4] */
+    float a[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
+    float v[] = {1.f, 0.f, 0.f};
+    L ma = make_mat(2, 3, a);
+    L mv = make_vec(3, v);
+
+    L expr = cons(atom("matmul"), cons(ma, cons(mv, nil)));
+    L r = eval(expr, env);
+    r2_assert("mat-vec result is TENS",  T(r) == TENS);
+    r2_assert("mat-vec rank == 1",       tensor_heap[ord(r)].rank == 1);
+    r2_assert("result[0] == 1",          tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("result[1] == 4",          tensor_heap[ord(r)].data[1] == 4.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    eval — undefined symbol returns ERR
    --------------------------------------------------------------------- */
 
@@ -597,6 +927,22 @@ static const char *all_tests(void)
     r2_run_test(test_eval_recursion);
     r2_run_test(test_eval_utf8_atoms);
     r2_run_test(test_eval_undefined);
+    r2_run_test(test_tens_tag);
+    r2_run_test(test_tensor_predicate);
+    r2_run_test(test_tensor_shape_rank_vec);
+    r2_run_test(test_tensor_shape_rank_mat);
+    r2_run_test(test_tensor_slice_vec);
+    r2_run_test(test_tensor_slice_mat);
+    r2_run_test(test_tensor_add);
+    r2_run_test(test_tensor_sub);
+    r2_run_test(test_tensor_mul);
+    r2_run_test(test_tensor_div);
+    r2_run_test(test_tensor_scalar_broadcast);
+    r2_run_test(test_tensor_mat_add);
+    r2_run_test(test_tensor_define);
+    r2_run_test(test_tensor_matmul_square);
+    r2_run_test(test_tensor_matmul_rect);
+    r2_run_test(test_tensor_matmul_matvec);
     return NULL;
 }
 

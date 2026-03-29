@@ -406,6 +406,44 @@ L f_tensor_p(L t, L e)
     return T(x) == TENS ? tru : nil;
 }
 
+/* (matmul A B) → matrix product of two rank-2 tensors (or mat-vec for rank-1 B)
+   A is (r1 x c1), B is (r2 x c2); requires c1 == r2.
+   If B is rank-1 (a vector of length r2), treats it as a column vector and
+   returns a rank-1 result of length r1. */
+L f_matmul(L t, L e)
+{
+    t = evlis(t, e);
+    L xa = car(t);
+    L xb = car(cdr(t));
+    if (T(xa) != TENS || T(xb) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(xa)];
+    tensor_t *b = &tensor_heap[ord(xb)];
+    if (a->rank != 2) return err;
+    /* accept rank-1 B as a column vector */
+    I r1 = a->shape[0], c1 = a->shape[1];
+    I r2 = (b->rank == 2) ? b->shape[0] : b->len;
+    I c2 = (b->rank == 2) ? b->shape[1] : 1;
+    if (c1 != r2) return err;
+    I out_len = r1 * c2;
+    float *out_data = malloc(out_len * sizeof(float));
+    if (!out_data) abort();
+    mat_mul(a->data, b->data,
+            (unsigned char)r1, (unsigned char)c1,
+            (unsigned char)r2, (unsigned char)c2,
+            out_data);
+    L result;
+    if (b->rank == 1) {
+        /* return a rank-1 vector */
+        I sh[1]; sh[0] = r1;
+        result = box(TENS, (I)(alloc_tensor(1, sh, r1, out_data) - tensor_heap));
+    } else {
+        I sh[2]; sh[0] = r1; sh[1] = c2;
+        result = box(TENS, (I)(alloc_tensor(2, sh, out_len, out_data) - tensor_heap));
+    }
+    free(out_data);
+    return result;
+}
+
 /* table of Lisp primitives, each has a name s and function pointer f */
 struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"cons", f_cons},     {"car", f_car},
@@ -420,8 +458,9 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"define", f_define},
                      {"shape", f_shape},   {"rank", f_rank},
                      {"slice", f_slice},   {"tensor?", f_tensor_p},
+                     {"matmul", f_matmul}, {"@", f_matmul},
                      {0}};
-int prim_count = 26;
+int prim_count = 28;
 
 void register_prim(const char *s, L (*f)(L, L))
 {
@@ -649,5 +688,43 @@ void print(L x)
 /* garbage collection removes temporary cells, keeps global environment */
 void gc(void)
 {
+    I i;
+    /* --- cell GC: discard everything above the environment --- */
     sp = ord(env);
+
+    /* --- tensor GC: mark / compact / patch --- */
+    if (th == 0) return;
+
+    /* 1. mark: scan all live cells for TENS references */
+    unsigned char mark[MAX_TENSORS];
+    memset(mark, 0, th);
+    for (i = sp; i < N; i++) {
+        L v = cell[i];
+        if (T(v) == TENS && ord(v) < th)
+            mark[ord(v)] = 1;
+    }
+
+    /* 2. compact live tensors to the front; build a remap table */
+    I remap[MAX_TENSORS];
+    I new_th = 0;
+    for (i = 0; i < th; i++) {
+        if (mark[i]) {
+            remap[i] = new_th;
+            if (i != new_th)
+                tensor_heap[new_th] = tensor_heap[i];
+            new_th++;
+        } else {
+            free(tensor_heap[i].data);
+            tensor_heap[i].data = NULL;
+        }
+    }
+
+    /* 3. patch TENS ordinals in all live cells to new positions */
+    for (i = sp; i < N; i++) {
+        L v = cell[i];
+        if (T(v) == TENS && ord(v) < th)
+            cell[i] = box(TENS, remap[ord(v)]);
+    }
+
+    th = new_th;
 }
