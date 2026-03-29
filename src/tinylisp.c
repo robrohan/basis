@@ -6,7 +6,7 @@
 I hp = 0, sp = N;
 
 /* atom, primitive, cons, closure and nil tags for NaN boxing */
-I ATOM = 0x7ff8, PRIM = 0x7ff9, CONS = 0x7ffa, CLOS = 0x7ffb, NIL = 0x7ffc;
+const I ATOM = 0x7ff8, PRIM = 0x7ff9, CONS = 0x7ffa, CLOS = 0x7ffb, NIL = 0x7ffc;
 
 /* cell[N] array of Lisp expressions, shared by the stack and atom heap */
 L cell[N];
@@ -22,13 +22,13 @@ L nil, tru, err, env;
 L box(I t, I i)
 {
     L x;
-    *(unsigned long long *)&x = (unsigned long long)t << 48 | i;
+    *(uint64_t *)&x = (uint64_t)t << 48 | i;
     return x;
 }
 
 I ord(L x)
 {
-    return *(unsigned long long *)&x; /* the return value is narrowed to 32 bit unsigned integer to remove the tag */
+    return (I)(*(uint64_t *)&x); /* narrowed to 32 bits, removing the tag */
 }
 
 L num(L n)
@@ -38,7 +38,7 @@ L num(L n)
 
 I equ(L x, L y)
 {
-    return *(unsigned long long *)&x == *(unsigned long long *)&y;
+    return *(uint64_t *)&x == *(uint64_t *)&y;
 }
 
 /* interning of atom names (Lisp symbols), returns a unique NaN-boxed ATOM */
@@ -98,8 +98,8 @@ L assoc(L v, L e)
     return T(e) == CONS ? cdr(car(e)) : err;
 }
 
-/* not(x) is nonzero if x is the Lisp () empty list a.k.a. nil or false */
-I not(L x)
+/* is_nil(x) is nonzero if x is the Lisp () empty list a.k.a. nil or false */
+I is_nil(L x)
 {
     return T(x) == NIL;
 }
@@ -107,14 +107,14 @@ I not(L x)
 /* let(x) is nonzero if x has more than one item, used by let* */
 I let(L x)
 {
-    return !not(x) && !not(cdr(x));
+    return !is_nil(x) && !is_nil(cdr(x));
 }
 
 /* return a new list of evaluated Lisp expressions t in environment e */
 L eval(L, L);
 L evlis(L t, L e)
 {
-    return T(t) == CONS ? cons(eval(car(t), e), evlis(cdr(t), e)) : T(t) == ATOM ? assoc(t, e) : nil;
+    return T(t) == CONS ? cons(eval(car(t), e), evlis(cdr(t), e)) : T(t) == ATOM ? assoc(t, e) : nil; /* NOLINT */
 }
 
 /* Lisp primitives:
@@ -176,7 +176,7 @@ L f_add(L t, L e)
     L n;
     t = evlis(t, e);
     n = car(t);
-    while (!not(t = cdr(t)))
+    while (!is_nil(t = cdr(t)))
         n += car(t);
     return num(n);
 }
@@ -186,7 +186,7 @@ L f_sub(L t, L e)
     L n;
     t = evlis(t, e);
     n = car(t);
-    while (!not(t = cdr(t)))
+    while (!is_nil(t = cdr(t)))
         n -= car(t);
     return num(n);
 }
@@ -196,7 +196,7 @@ L f_mul(L t, L e)
     L n;
     t = evlis(t, e);
     n = car(t);
-    while (!not(t = cdr(t)))
+    while (!is_nil(t = cdr(t)))
         n *= car(t);
     return num(n);
 }
@@ -206,7 +206,7 @@ L f_div(L t, L e)
     L n;
     t = evlis(t, e);
     n = car(t);
-    while (!not(t = cdr(t)))
+    while (!is_nil(t = cdr(t)))
         n /= car(t);
     return num(n);
 }
@@ -236,7 +236,7 @@ L f_pair(L t, L e)
 L f_or(L t, L e)
 {
     L x = nil;
-    while (!not(t) && not(x = eval(car(t), e)))
+    while (!is_nil(t) && is_nil(x = eval(car(t), e)))
         t = cdr(t);
     return x;
 }
@@ -244,26 +244,26 @@ L f_or(L t, L e)
 L f_and(L t, L e)
 {
     L x = tru;
-    while (!not(t) && !not(x = eval(car(t), e)))
+    while (!is_nil(t) && !is_nil(x = eval(car(t), e)))
         t = cdr(t);
     return x;
 }
 
 L f_not(L t, L e)
 {
-    return not(car(evlis(t, e))) ? tru : nil;
+    return is_nil(car(evlis(t, e))) ? tru : nil;
 }
 
 L f_cond(L t, L e)
 {
-    while (not(eval(car(car(t)), e)))
+    while (is_nil(eval(car(car(t)), e)))
         t = cdr(t);
     return eval(car(cdr(car(t))), e);
 }
 
 L f_if(L t, L e)
 {
-    return eval(car(cdr(not(eval(car(t), e)) ? cdr(t) : t)), e);
+    return eval(car(cdr(is_nil(eval(car(t), e)) ? cdr(t) : t)), e);
 }
 
 L f_leta(L t, L e)
@@ -310,13 +310,13 @@ void register_prim(const char *s, L (*f)(L, L))
 /* create environment by extending e with variables v bound to values t */
 L bind(L v, L t, L e)
 {
-    return not(v) ? e : T(v) == CONS ? bind(cdr(v), cdr(t), pair(car(v), car(t), e)) : pair(v, t, e);
+    return is_nil(v) ? e : T(v) == CONS ? bind(cdr(v), cdr(t), pair(car(v), car(t), e)) : pair(v, t, e);
 }
 
 /* apply closure f to arguments t in environemt e */
 L reduce(L f, L t, L e)
 {
-    return eval(cdr(car(f)), bind(car(car(f)), evlis(t, e), not(cdr(f)) ? env : cdr(f)));
+    return eval(cdr(car(f)), bind(car(car(f)), evlis(t, e), is_nil(cdr(f)) ? env : cdr(f)));
 }
 
 /* apply closure or primitive f to arguments t in environment e, or return ERR */
@@ -332,7 +332,8 @@ L eval(L x, L e)
 }
 
 /* tokenization buffer and the next character that we are looking at */
-char buf[40], see = ' ';
+char buf[40];
+int see = ' ';
 
 /* advance to the next character */
 void look(void)
@@ -350,9 +351,9 @@ I seeing(char c)
 }
 
 /* return the look ahead character from standard input, advance to the next */
-char get(void)
+int get(void)
 {
-    char c = see;
+    int c = see;
     look();
     return c;
 }
@@ -423,7 +424,7 @@ void printlist(L t)
     {
         print(car(t));
         t = cdr(t);
-        if (not(t))
+        if (is_nil(t))
             break;
         if (T(t) != CONS)
         {
