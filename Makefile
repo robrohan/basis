@@ -41,6 +41,7 @@ build:
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
+		-D_POSIX_C_SOURCE=200809L \
 		./src/tinylisp.c ./src/main.c \
 		-I./vendor \
 		-I./src \
@@ -50,6 +51,7 @@ test:
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
+		-D_POSIX_C_SOURCE=200809L \
 		./src/tinylisp.c ./src/test_main.c \
 		-I./vendor \
 		-I./src \
@@ -61,6 +63,7 @@ release_cli:
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O2 -std=$(STD) \
+		-D_POSIX_C_SOURCE=200809L \
 		./src/tinylisp.c ./src/main.c \
 		-I./vendor \
 		-I./src \
