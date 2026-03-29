@@ -465,6 +465,111 @@ L f_transpose(L t, L e)
     return result;
 }
 
+/* ---- helpers shared by unary tensor → tensor primitives ---- */
+/* apply a vecn_* unary function to any rank tensor */
+#define TENS_UNARY(fn) \
+    L x = car(evlis(t, e)); \
+    if (T(x) != TENS) return err; \
+    tensor_t *a = &tensor_heap[ord(x)]; \
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL); \
+    fn(a->data, a->len, out->data); \
+    return box(TENS, (I)(out - tensor_heap));
+
+/* (abs v) — element-wise absolute value */
+L f_vabs(L t, L e)    { TENS_UNARY(vecn_abs) }
+
+/* (sqrt v) — element-wise square root */
+L f_vsqrt(L t, L e)   { TENS_UNARY(vecn_sqrt) }
+
+/* (normalize v) — scale to unit length */
+L f_normalize(L t, L e) { TENS_UNARY(vecn_normalize) }
+
+/* (pow v exp) — element-wise v^exp */
+L f_vpow(L t, L e)
+{
+    t = evlis(t, e);
+    L x   = car(t);
+    L exp = car(cdr(t));
+    if (T(x) != TENS) return err;
+    tensor_t *a   = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    vecn_pow(a->data, (float)exp, a->len, out->data);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (zero n) — rank-1 tensor of n zeros */
+L f_zero(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I n = (I)x;
+    I sh[1]; sh[0] = n;
+    tensor_t *out = alloc_tensor(1, sh, n, NULL);
+    vecn_zero(out->data, (int)n);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (dot v1 v2) — dot product → scalar */
+L f_dot(L t, L e)
+{
+    t = evlis(t, e);
+    L xa = car(t), xb = car(cdr(t));
+    if (T(xa) != TENS || T(xb) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(xa)];
+    tensor_t *b = &tensor_heap[ord(xb)];
+    return (L)vecn_dot(a->data, b->data, (int)a->len);
+}
+
+/* (length v) — Euclidean length → scalar */
+L f_length(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    return (L)vecn_length(a->data, (int)a->len);
+}
+
+/* (length2 v) — length squared → scalar (cheaper than length) */
+L f_length2(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    return (L)vecn_length_sqrd(a->data, (int)a->len);
+}
+
+/* (dist v1 v2) — Euclidean distance → scalar */
+L f_dist(L t, L e)
+{
+    t = evlis(t, e);
+    L xa = car(t), xb = car(cdr(t));
+    if (T(xa) != TENS || T(xb) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(xa)];
+    tensor_t *b = &tensor_heap[ord(xb)];
+    return (L)vecn_dist(a->data, b->data, (int)a->len);
+}
+
+/* (dist2 v1 v2) — distance squared → scalar */
+L f_dist2(L t, L e)
+{
+    t = evlis(t, e);
+    L xa = car(t), xb = car(cdr(t));
+    if (T(xa) != TENS || T(xb) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(xa)];
+    tensor_t *b = &tensor_heap[ord(xb)];
+    return (L)vecn_dist_sqrd(a->data, b->data, (int)a->len);
+}
+
+/* (vec= v1 v2) — element-wise equality → #t or () */
+L f_veq(L t, L e)
+{
+    t = evlis(t, e);
+    L xa = car(t), xb = car(cdr(t));
+    if (T(xa) != TENS || T(xb) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(xa)];
+    tensor_t *b = &tensor_heap[ord(xb)];
+    return vecn_equals(a->data, b->data, (int)a->len) ? tru : nil;
+}
+
 /* table of Lisp primitives, each has a name s and function pointer f */
 struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"cons", f_cons},     {"car", f_car},
@@ -480,9 +585,16 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"shape", f_shape},   {"rank", f_rank},
                      {"slice", f_slice},   {"tensor?", f_tensor_p},
                      {"matmul", f_matmul}, {"@", f_matmul},
-                     {"transpose", f_transpose},
+                     {"transpose", f_transpose}, {"T", f_transpose},
+                     {"abs", f_vabs},     {"sqrt", f_vsqrt},
+                     {"normalize", f_normalize}, {"pow", f_vpow},
+                     {"zero", f_zero},
+                     {"dot", f_dot},
+                     {"length", f_length}, {"length2", f_length2},
+                     {"dist", f_dist},     {"dist2", f_dist2},
+                     {"vec=", f_veq},
                      {0}};
-int prim_count = 29;
+int prim_count = 41;
 
 void register_prim(const char *s, L (*f)(L, L))
 {

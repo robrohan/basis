@@ -139,5 +139,16 @@ L f_slice(L t, L e);
 L f_tensor_p(L t, L e);
 L f_matmul(L t, L e);
 L f_transpose(L t, L e);
+L f_vabs(L t, L e);
+L f_vsqrt(L t, L e);
+L f_normalize(L t, L e);
+L f_vpow(L t, L e);
+L f_zero(L t, L e);
+L f_dot(L t, L e);
+L f_length(L t, L e);
+L f_length2(L t, L e);
+L f_dist(L t, L e);
+L f_dist2(L t, L e);
+L f_veq(L t, L e);
 
 #endif /* TINYLISP_H */

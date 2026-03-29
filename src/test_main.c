@@ -912,6 +912,118 @@ static const char *test_tensor_transpose(void)
 }
 
 /* -----------------------------------------------------------------------
+   tensor — vecn primitives
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_abs(void)
+{
+    setup();
+    float d[] = {-3.f, 1.f, -2.f};
+    L v = make_vec(3, d);
+    L r = eval(cons(atom("abs"), cons(v, nil)), env);
+    r2_assert("abs[0] == 3", tensor_heap[ord(r)].data[0] == 3.f);
+    r2_assert("abs[1] == 1", tensor_heap[ord(r)].data[1] == 1.f);
+    r2_assert("abs[2] == 2", tensor_heap[ord(r)].data[2] == 2.f);
+    return NULL;
+}
+
+static const char *test_tensor_sqrt(void)
+{
+    setup();
+    float d[] = {4.f, 9.f, 16.f};
+    L v = make_vec(3, d);
+    L r = eval(cons(atom("sqrt"), cons(v, nil)), env);
+    r2_assert("sqrt[0] == 2", tensor_heap[ord(r)].data[0] == 2.f);
+    r2_assert("sqrt[1] == 3", tensor_heap[ord(r)].data[1] == 3.f);
+    r2_assert("sqrt[2] == 4", tensor_heap[ord(r)].data[2] == 4.f);
+    return NULL;
+}
+
+static const char *test_tensor_normalize(void)
+{
+    setup();
+    float d[] = {3.f, 4.f};
+    L v = make_vec(2, d);
+    L r = eval(cons(atom("normalize"), cons(v, nil)), env);
+    r2_assert("normalize[0] == 0.6", tensor_heap[ord(r)].data[0] == 0.6f);
+    r2_assert("normalize[1] == 0.8", tensor_heap[ord(r)].data[1] == 0.8f);
+    return NULL;
+}
+
+static const char *test_tensor_pow(void)
+{
+    setup();
+    float d[] = {2.f, 3.f, 4.f};
+    L v = make_vec(3, d);
+    L r = eval(cons(atom("pow"), cons(v, cons((L)2.0, nil))), env);
+    r2_assert("pow[0] == 4",  tensor_heap[ord(r)].data[0] == 4.f);
+    r2_assert("pow[1] == 9",  tensor_heap[ord(r)].data[1] == 9.f);
+    r2_assert("pow[2] == 16", tensor_heap[ord(r)].data[2] == 16.f);
+    return NULL;
+}
+
+static const char *test_tensor_zero(void)
+{
+    setup();
+    L r = eval(cons(atom("zero"), cons((L)4.0, nil)), env);
+    r2_assert("zero is TENS",     T(r) == TENS);
+    r2_assert("zero len == 4",    tensor_heap[ord(r)].len == 4);
+    r2_assert("zero[0] == 0",     tensor_heap[ord(r)].data[0] == 0.f);
+    r2_assert("zero[3] == 0",     tensor_heap[ord(r)].data[3] == 0.f);
+    return NULL;
+}
+
+static const char *test_tensor_dot(void)
+{
+    setup();
+    float a[] = {1.f, 2.f, 3.f};
+    float b[] = {4.f, 5.f, 6.f};
+    L va = make_vec(3, a), vb = make_vec(3, b);
+    L r = eval(cons(atom("dot"), cons(va, cons(vb, nil))), env);
+    r2_assert("dot [1 2 3].[4 5 6] == 32", equ(r, (L)32.0));
+    return NULL;
+}
+
+static const char *test_tensor_length(void)
+{
+    setup();
+    float d[] = {3.f, 4.f};
+    L v = make_vec(2, d);
+    L len  = eval(cons(atom("length"),  cons(v, nil)), env);
+    L len2 = eval(cons(atom("length2"), cons(v, nil)), env);
+    r2_assert("length [3 4] == 5",   equ(len,  (L)5.0));
+    r2_assert("length2 [3 4] == 25", equ(len2, (L)25.0));
+    return NULL;
+}
+
+static const char *test_tensor_dist(void)
+{
+    setup();
+    float a[] = {0.f, 0.f};
+    float b[] = {3.f, 4.f};
+    L va = make_vec(2, a), vb = make_vec(2, b);
+    L d  = eval(cons(atom("dist"),  cons(va, cons(vb, nil))), env);
+    L d2 = eval(cons(atom("dist2"), cons(va, cons(vb, nil))), env);
+    r2_assert("dist [0 0] [3 4] == 5",   equ(d,  (L)5.0));
+    r2_assert("dist2 [0 0] [3 4] == 25", equ(d2, (L)25.0));
+    return NULL;
+}
+
+static const char *test_tensor_veq(void)
+{
+    setup();
+    float a[] = {1.f, 2.f, 3.f};
+    float b[] = {1.f, 2.f, 3.f};
+    float c[] = {1.f, 2.f, 4.f};
+    L va = make_vec(3, a), vb = make_vec(3, b), vc = make_vec(3, c);
+    L eq  = eval(cons(atom("vec="), cons(va, cons(vb, nil))), env);
+    L neq = eval(cons(atom("vec="), cons(va, cons(vc, nil))), env);
+    r2_assert("vec= equal tensors is #t",     equ(eq, tru));
+    r2_assert("vec= unequal tensors is nil",  equ(neq, nil));
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    eval — undefined symbol returns ERR
    --------------------------------------------------------------------- */
 
@@ -982,6 +1094,15 @@ static const char *all_tests(void)
     r2_run_test(test_tensor_matmul_matvec);
     r2_run_test(test_tensor_matmul_vecmat);
     r2_run_test(test_tensor_transpose);
+    r2_run_test(test_tensor_abs);
+    r2_run_test(test_tensor_sqrt);
+    r2_run_test(test_tensor_normalize);
+    r2_run_test(test_tensor_pow);
+    r2_run_test(test_tensor_zero);
+    r2_run_test(test_tensor_dot);
+    r2_run_test(test_tensor_length);
+    r2_run_test(test_tensor_dist);
+    r2_run_test(test_tensor_veq);
     return NULL;
 }
 
