@@ -8,7 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_PRIMS 128
+#define MAX_PRIMS    128
+#define MAX_TENSORS  256  /* max live tensors; increase as needed */
+#define MAX_RANK     8    /* max tensor dimensions */
 
 /* we only need two types to implement a Lisp interpreter:
         I    32-bit unsigned integer for tags, ordinals, heap/stack indices
@@ -40,9 +42,18 @@ typedef double   L;
 #define N 1024
 
 // These exist somewhere :)
-extern I hp, sp;
-extern const I ATOM, PRIM, CONS, CLOS, NIL;
+/* tensor: rank-N array of floats, backed by r2_maths vecn_* operations */
+typedef struct {
+    I     rank;
+    I     shape[MAX_RANK];
+    I     len;   /* total number of elements (product of shape) */
+    float *data; /* heap-allocated flat row-major float array   */
+} tensor_t;
+
+extern I hp, sp, th;
+extern const I ATOM, PRIM, CONS, CLOS, NIL, TENS;
 extern L cell[N];
+extern tensor_t tensor_heap[MAX_TENSORS];
 extern L nil, tru, err, env;
 struct prims { const char *s; L (*f)(L, L); };
 struct prims prim[MAX_PRIMS];
@@ -120,5 +131,11 @@ L atomic(void);
 void print(L);
 void printlist(L t);
 void gc(void);
+
+tensor_t *alloc_tensor(I rank, const I *shape, I len, const float *data);
+L f_shape(L t, L e);
+L f_rank(L t, L e);
+L f_slice(L t, L e);
+L f_tensor_p(L t, L e);
 
 #endif /* TINYLISP_H */

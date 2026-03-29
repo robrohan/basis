@@ -6,29 +6,19 @@ kanban-plugin: board
 
 ## 🧊 Backlog
 
+- [ ] Add regression tests to test_main.c for multi-byte atoms used as values
+
 - [ ] Wire r2_maths.h for vec2/vec4/mat3/mat4 fast paths on common tensor shapes
 - [ ] Implement matmul primitive using r2_maths mat_mul for general case
 - [ ] Implement scalar broadcast in arithmetic (scalar op tensor)
 - [ ] Implement head/tail sugar: head = slice 0, tail = slice 1:end
-- [ ] Write integration tests for arithmetic and matmul on tensors
 - [ ] Update README with syntax overview and examples
 
 ## 📝 Todo
 
-- [ ] Add TENS NaN-box tag (0x7ffd) to tinylisp.h alongside ATOM, PRIM, CONS, CLOS, NIL
-- [ ] Define tensor_t struct (rank, shape[8], len, float* data) and tensor heap in tinylisp.h
-- [ ] Update scanner: add [ and ] as token delimiters; treat , as whitespace
-- [ ] Update parser: parse tensor literals [ elem ... ] into TENS values
-- [ ] Update parser: handle (op, [args]) expression form
-- [ ] Update eval: TENS values are self-evaluating (like numbers)
-- [ ] Update print/printlist: display TENS values as [ e1 e2 ... ]
 - [ ] Update gc: trace and collect tensors on the tensor heap
-- [ ] Implement shape primitive: (shape, [t]) → vector of dimensions
-- [ ] Implement rank primitive: (rank, [t]) → scalar
-- [ ] Implement slice primitive: (slice, [t, i]) → element or sub-tensor at index i
-- [ ] Add tensor? predicate primitive
-- [ ] Update arithmetic primitives (+, -, *, /) to operate element-wise on TENS
 - [ ] Write integration tests for tensor literals, shape, rank, slice
+- [ ] Write integration tests for arithmetic and matmul on tensors
 
 ## 👨‍💻 Doing (0)
 
@@ -51,3 +41,17 @@ kanban-plugin: board
 - [x] Write tests: define and call lambdas with emoji names (e.g. 🔥, λ, π)
 - [x] Write C unit tests (src/test_main.c) using r2_unit.h covering NaN-boxing, atoms, cons/car/cdr, eval, closures, recursion, UTF-8
 - [x] Add make test target to Makefile
+- [x] Fix REPL prompt flushing (fflush stdout) so multi-byte input works correctly in interactive mode
+- [x] Add TENS NaN-box tag (0x7ffd) to tinylisp.h alongside ATOM, PRIM, CONS, CLOS, NIL
+- [x] Define tensor_t struct (rank, shape[8], len, float* data) and tensor heap in tinylisp.h
+- [x] Update scanner: add [ and ] as token delimiters; treat , as whitespace
+- [x] Update parser: parse tensor literals [ elem ... ] into TENS values
+- [x] Update parser: handle (op, [args]) expression form
+- [x] Update eval: TENS values are self-evaluating (like numbers)
+- [x] Update print/printlist: display TENS values as [ e1 e2 ... ]
+- [x] Implement shape primitive: (shape, [t]) → vector of dimensions
+- [x] Implement rank primitive: (rank, [t]) → scalar
+- [x] Implement slice primitive: (slice, [t, i]) → element or sub-tensor at index i
+- [x] Add tensor? predicate primitive
+- [x] Update arithmetic primitives (+, -, *, /) to operate element-wise on TENS
+- [x] Fix scan() do-while to stop at [ and ] token boundaries

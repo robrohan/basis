@@ -1,5 +1,7 @@
 #define R2_STRINGS_IMPLEMENTATION
 #include "r2_strings.h"
+#define R2_MATHS_IMPLEMENTATION
+#include "r2_maths.h"
 #include "tinylisp.h"
 
 /* hp: top of the atom heap pointer, A+hp with hp=0 points to the first atom string in cell[]
@@ -7,8 +9,13 @@
    safety invariant: hp <= sp<<3 */
 I hp = 0, sp = N;
 
-/* atom, primitive, cons, closure and nil tags for NaN boxing */
-const I ATOM = 0x7ff8, PRIM = 0x7ff9, CONS = 0x7ffa, CLOS = 0x7ffb, NIL = 0x7ffc;
+/* atom, primitive, cons, closure, nil, and tensor tags for NaN boxing */
+const I ATOM = 0x7ff8, PRIM = 0x7ff9, CONS = 0x7ffa, CLOS = 0x7ffb, NIL = 0x7ffc, TENS = 0x7ffd;
+
+/* tensor heap: pool of tensor_t structs; th is the next free slot.
+   tensor data arrays are malloc'd and currently never freed (TODO: mark-sweep gc) */
+tensor_t tensor_heap[MAX_TENSORS];
+I th = 0;
 
 /* cell[N] array of Lisp expressions, shared by the stack and atom heap */
 L cell[N];
@@ -173,43 +180,90 @@ L f_cdr(L t, L e)
     return cdr(car(evlis(t, e)));
 }
 
+/* helper: apply a scalar op element-wise, or tensor+tensor, returning new tensor */
+static L tens_binop(L a, L b, char op)
+{
+    I i;
+    if (T(a) == TENS) {
+        tensor_t *ta = &tensor_heap[ord(a)];
+        tensor_t *out = alloc_tensor(ta->rank, ta->shape, ta->len, NULL);
+        if (T(b) == TENS) {
+            tensor_t *tb = &tensor_heap[ord(b)];
+            for (i = 0; i < ta->len; i++) {
+                switch (op) {
+                    case '+': out->data[i] = ta->data[i] + tb->data[i]; break;
+                    case '-': out->data[i] = ta->data[i] - tb->data[i]; break;
+                    case '*': out->data[i] = ta->data[i] * tb->data[i]; break;
+                    case '/': out->data[i] = ta->data[i] / tb->data[i]; break;
+                }
+            }
+        } else {
+            float s = (float)b;
+            for (i = 0; i < ta->len; i++) {
+                switch (op) {
+                    case '+': out->data[i] = ta->data[i] + s; break;
+                    case '-': out->data[i] = ta->data[i] - s; break;
+                    case '*': out->data[i] = ta->data[i] * s; break;
+                    case '/': out->data[i] = ta->data[i] / s; break;
+                }
+            }
+        }
+        return box(TENS, (I)(out - tensor_heap));
+    }
+    /* scalar op tensor: broadcast scalar on left */
+    if (T(b) == TENS) {
+        tensor_t *tb = &tensor_heap[ord(b)];
+        tensor_t *out = alloc_tensor(tb->rank, tb->shape, tb->len, NULL);
+        float s = (float)a;
+        for (i = 0; i < tb->len; i++) {
+            switch (op) {
+                case '+': out->data[i] = s + tb->data[i]; break;
+                case '-': out->data[i] = s - tb->data[i]; break;
+                case '*': out->data[i] = s * tb->data[i]; break;
+                case '/': out->data[i] = s / tb->data[i]; break;
+            }
+        }
+        return box(TENS, (I)(out - tensor_heap));
+    }
+    /* both scalar */
+    switch (op) {
+        case '+': return a + b;
+        case '-': return a - b;
+        case '*': return a * b;
+        case '/': return a / b;
+    }
+    return err;
+}
+
 L f_add(L t, L e)
 {
-    L n;
     t = evlis(t, e);
-    n = car(t);
-    while (!is_nil(t = cdr(t)))
-        n += car(t);
+    L n = car(t);
+    while (!is_nil(t = cdr(t))) n = tens_binop(n, car(t), '+');
     return num(n);
 }
 
 L f_sub(L t, L e)
 {
-    L n;
     t = evlis(t, e);
-    n = car(t);
-    while (!is_nil(t = cdr(t)))
-        n -= car(t);
+    L n = car(t);
+    while (!is_nil(t = cdr(t))) n = tens_binop(n, car(t), '-');
     return num(n);
 }
 
 L f_mul(L t, L e)
 {
-    L n;
     t = evlis(t, e);
-    n = car(t);
-    while (!is_nil(t = cdr(t)))
-        n *= car(t);
+    L n = car(t);
+    while (!is_nil(t = cdr(t))) n = tens_binop(n, car(t), '*');
     return num(n);
 }
 
 L f_div(L t, L e)
 {
-    L n;
     t = evlis(t, e);
-    n = car(t);
-    while (!is_nil(t = cdr(t)))
-        n /= car(t);
+    L n = car(t);
+    while (!is_nil(t = cdr(t))) n = tens_binop(n, car(t), '/');
     return num(n);
 }
 
@@ -286,6 +340,72 @@ L f_define(L t, L e)
     return car(t);
 }
 
+/* allocate a tensor from the pool, copying shape and data */
+tensor_t *alloc_tensor(I rank, const I *shape, I len, const float *data)
+{
+    I i;
+    if (th >= MAX_TENSORS) abort();
+    tensor_t *t = &tensor_heap[th++];
+    t->rank = rank;
+    t->len  = len;
+    for (i = 0; i < rank; i++) t->shape[i] = shape[i];
+    t->data = malloc(len * sizeof(float));
+    if (!t->data) abort();
+    if (data)
+        for (i = 0; i < len; i++) t->data[i] = data[i];
+    else
+        for (i = 0; i < len; i++) t->data[i] = 0.f;
+    return t;
+}
+
+/* (shape t) → rank-1 tensor of dimension sizes */
+L f_shape(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *tens = &tensor_heap[ord(x)];
+    float sd[MAX_RANK];
+    I i, s[1];
+    for (i = 0; i < tens->rank; i++) sd[i] = (float)tens->shape[i];
+    s[0] = tens->rank;
+    return box(TENS, (I)(alloc_tensor(1, s, tens->rank, sd) - tensor_heap));
+}
+
+/* (rank t) → scalar */
+L f_rank(L t, L e)
+{
+    L x = car(evlis(t, e));
+    return T(x) == TENS ? (L)tensor_heap[ord(x)].rank : err;
+}
+
+/* (slice t i) → element (scalar) or sub-tensor (row) at index i along axis 0 */
+L f_slice(L t, L e)
+{
+    I i;
+    t = evlis(t, e);
+    L x   = car(t);
+    L idx = car(cdr(t));
+    if (T(x) != TENS) return err;
+    tensor_t *tens = &tensor_heap[ord(x)];
+    i = (I)idx;
+    if (tens->rank == 1)
+        return (L)tens->data[i];
+    /* return a row as a sub-tensor */
+    I row  = tens->len / tens->shape[0];
+    I sh[MAX_RANK];
+    I r;
+    for (r = 0; r < tens->rank - 1; r++) sh[r] = tens->shape[r + 1];
+    return box(TENS, (I)(alloc_tensor(tens->rank - 1, sh, row,
+                                     tens->data + i * row) - tensor_heap));
+}
+
+/* (tensor? x) → #t if x is a tensor */
+L f_tensor_p(L t, L e)
+{
+    L x = car(evlis(t, e));
+    return T(x) == TENS ? tru : nil;
+}
+
 /* table of Lisp primitives, each has a name s and function pointer f */
 struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"cons", f_cons},     {"car", f_car},
@@ -297,8 +417,11 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"and", f_and},       {"not", f_not},
                      {"cond", f_cond},     {"if", f_if},
                      {"let*", f_leta},     {"lambda", f_lambda},
-                     {"define", f_define}, {0}};
-int prim_count = 22;
+                     {"define", f_define},
+                     {"shape", f_shape},   {"rank", f_rank},
+                     {"slice", f_slice},   {"tensor?", f_tensor_p},
+                     {0}};
+int prim_count = 26;
 
 void register_prim(const char *s, L (*f)(L, L))
 {
@@ -346,10 +469,11 @@ void look(void)
         exit(0);
 }
 
-/* return nonzero if we are looking at character c, ' ' means any white space */
+/* return nonzero if we are looking at character c, ' ' means any white space.
+   commas are treated as whitespace so [1, 2, 3] == [1 2 3] */
 I seeing(int c)
 {
-    return c == ' ' ? see > 0 && see <= c : see == c;
+    return c == ' ' ? (see > 0 && see <= c) || see == ',' : see == c;
 }
 
 /* return the look ahead character from standard input, advance to the next */
@@ -366,7 +490,7 @@ char scan(void)
     I i = 0;
     while (seeing(' '))
         look();
-    if (seeing('(') || seeing(')') || seeing('\''))
+    if (seeing('(') || seeing(')') || seeing('\'') || seeing('[') || seeing(']'))
         buf[i++] = (char)get();
     else
         do {
@@ -376,7 +500,7 @@ char scan(void)
             int b;
             for (b = 0; b < bytes && i < 255; b++)
                 buf[i++] = (char)get();
-        } while (i < 255 && !seeing('(') && !seeing(')') && !seeing(' '));
+        } while (i < 255 && !seeing('(') && !seeing(')') && !seeing('[') && !seeing(']') && !seeing(' '));
     buf[i] = 0;
     return *buf;
 }
@@ -418,10 +542,45 @@ L atomic(void)
     return (sscanf(buf, "%lg%n", &n, &i) > 0 && !buf[i]) ? n : atom(buf);
 }
 
+/* parse a tensor literal [ e1 e2 ... ] or [ [r1...] [r2...] ]
+   called after [ has already been scanned into buf */
+L tensor_lit(void)
+{
+    float data[1024];
+    I count = 0, inner_size = 0, is_matrix = 0, r;
+    I shape[2];
+
+    while (scan() != ']') {
+        if (*buf == '[') {
+            /* nested row for rank-2 matrix */
+            I row_start = count;
+            is_matrix = 1;
+            while (scan() != ']') {
+                L x = atomic();
+                if (count < 1024) data[count++] = (float)x;
+            }
+            if (inner_size == 0) inner_size = count - row_start;
+        } else {
+            L x = atomic();
+            if (count < 1024) data[count++] = (float)x;
+        }
+    }
+
+    if (is_matrix && inner_size > 0) {
+        shape[0] = count / inner_size;
+        shape[1] = inner_size;
+        r = 2;
+    } else {
+        shape[0] = count;
+        r = 1;
+    }
+    return box(TENS, (I)(alloc_tensor(r, shape, count, data) - tensor_heap));
+}
+
 /* return a parsed Lisp expression */
 L parse(void)
 {
-    return *buf == '(' ? list() : *buf == '\'' ? quote() : atomic();
+    return *buf == '(' ? list() : *buf == '[' ? tensor_lit() : *buf == '\'' ? quote() : atomic();
 }
 
 /* display a Lisp list t */
@@ -456,6 +615,16 @@ void print(L x)
         printlist(x);
     else if (T(x) == CLOS)
         printf("{%u}", ord(x));
+    else if (T(x) == TENS) {
+        tensor_t *t = &tensor_heap[ord(x)];
+        I i;
+        printf("[");
+        for (i = 0; i < t->len; i++) {
+            if (i > 0) printf(" ");
+            printf("%.6g", t->data[i]);
+        }
+        printf("]");
+    }
     else
         printf("%.10lg", x);
 }
