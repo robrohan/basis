@@ -603,6 +603,29 @@ void printlist(L t)
 }
 
 /* display a Lisp expression x */
+/* recursively print a sub-tensor rooted at data[offset] with given shape/rank */
+static void print_tensor(const float *data, const I *shape, I rank, I offset)
+{
+    I i;
+    printf("[");
+    if (rank == 1) {
+        for (i = 0; i < shape[0]; i++) {
+            if (i > 0) printf(" ");
+            printf("%.6g", data[offset + i]);
+        }
+    } else {
+        /* stride = product of remaining dimensions */
+        I stride = 1;
+        for (i = 1; i < rank; i++)
+            stride *= shape[i];
+        for (i = 0; i < shape[0]; i++) {
+            if (i > 0) printf(" ");
+            print_tensor(data, shape + 1, rank - 1, offset + i * stride);
+        }
+    }
+    printf("]");
+}
+
 void print(L x)
 {
     if (T(x) == NIL)
@@ -617,13 +640,7 @@ void print(L x)
         printf("{%u}", ord(x));
     else if (T(x) == TENS) {
         tensor_t *t = &tensor_heap[ord(x)];
-        I i;
-        printf("[");
-        for (i = 0; i < t->len; i++) {
-            if (i > 0) printf(" ");
-            printf("%.6g", t->data[i]);
-        }
-        printf("]");
+        print_tensor(t->data, t->shape, t->rank, 0);
     }
     else
         printf("%.10lg", x);
