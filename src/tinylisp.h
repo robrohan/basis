@@ -136,6 +136,8 @@ tensor_t *alloc_tensor(I rank, const I *shape, I len, const float *data);
 L f_shape(L t, L e);
 L f_rank(L t, L e);
 L f_slice(L t, L e);
+L f_head(L t, L e);
+L f_tail(L t, L e);
 L f_tensor_p(L t, L e);
 L f_matmul(L t, L e);
 L f_transpose(L t, L e);

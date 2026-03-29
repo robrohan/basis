@@ -399,6 +399,38 @@ L f_slice(L t, L e)
                                      tens->data + i * row) - tensor_heap));
 }
 
+/* (head t) → first element or row (sugar for slice 0) */
+L f_head(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *tens = &tensor_heap[ord(x)];
+    if (tens->rank == 1)
+        return (L)tens->data[0];
+    I row = tens->len / tens->shape[0];
+    I sh[MAX_RANK];
+    I i;
+    for (i = 0; i < tens->rank - 1; i++) sh[i] = tens->shape[i + 1];
+    return box(TENS, (I)(alloc_tensor(tens->rank - 1, sh, row, tens->data) - tensor_heap));
+}
+
+/* (tail t) → all elements after the first (rank-1: subvector, rank-2: submatrix) */
+L f_tail(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *tens = &tensor_heap[ord(x)];
+    if (tens->shape[0] < 2) return err;
+    I sh[MAX_RANK];
+    I i;
+    for (i = 0; i < tens->rank; i++) sh[i] = tens->shape[i];
+    sh[0] = tens->shape[0] - 1;
+    I row = tens->len / tens->shape[0];
+    I new_len = sh[0] * row;
+    return box(TENS, (I)(alloc_tensor(tens->rank, sh, new_len,
+                                     tens->data + row) - tensor_heap));
+}
+
 /* (tensor? x) → #t if x is a tensor */
 L f_tensor_p(L t, L e)
 {
@@ -465,35 +497,83 @@ L f_transpose(L t, L e)
     return result;
 }
 
-/* ---- helpers shared by unary tensor → tensor primitives ---- */
-/* apply a vecn_* unary function to any rank tensor */
-#define TENS_UNARY(fn) \
+/* ---- fast-path dispatch macros for vec2 (len=2) and vec4 (len=4) ----
+   vec2 is a union of float[2]; vec4 is a union of float[4].
+   Casting our flat float* data to these pointer types is safe for those
+   exact sizes.  len=3 uses vecn_* because vec3 is the same 4-float union
+   as vec4 — casting a malloc'd float[3] to vec3* would over-read. */
+
+/* dispatch unary tensor→tensor: vec2/vec4 fast path, else vecn_* */
+#define TENS_UNARY_DISP(fn2, fn4, fnn) \
     L x = car(evlis(t, e)); \
     if (T(x) != TENS) return err; \
     tensor_t *a = &tensor_heap[ord(x)]; \
     tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL); \
-    fn(a->data, a->len, out->data); \
+    if      (a->len == 2) fn2((const vec2 *)a->data, (vec2 *)out->data); \
+    else if (a->len == 4) fn4((const vec4 *)a->data, (vec4 *)out->data); \
+    else                  fnn(a->data, a->len, out->data); \
     return box(TENS, (I)(out - tensor_heap));
 
-/* (abs v) — element-wise absolute value */
-L f_vabs(L t, L e)    { TENS_UNARY(vecn_abs) }
+/* dispatch binary tensor→scalar: vec2/vec4 fast path, else vecn_* */
+#define TENS_BINARY_SCALAR_DISP(fn2, fn4, fnn) \
+    t = evlis(t, e); \
+    L xa = car(t), xb = car(cdr(t)); \
+    if (T(xa) != TENS || T(xb) != TENS) return err; \
+    tensor_t *a = &tensor_heap[ord(xa)]; \
+    tensor_t *b = &tensor_heap[ord(xb)]; \
+    if      (a->len == 2) return (L)fn2((const vec2 *)a->data, (const vec2 *)b->data); \
+    else if (a->len == 4) return (L)fn4((const vec4 *)a->data, (const vec4 *)b->data); \
+    else                  return (L)fnn(a->data, b->data, (int)a->len);
 
-/* (sqrt v) — element-wise square root */
-L f_vsqrt(L t, L e)   { TENS_UNARY(vecn_sqrt) }
+/* dispatch unary tensor→scalar: vec2/vec4 fast path, else vecn_* */
+#define TENS_UNARY_SCALAR_DISP(fn2, fn4, fnn) \
+    L x = car(evlis(t, e)); \
+    if (T(x) != TENS) return err; \
+    tensor_t *a = &tensor_heap[ord(x)]; \
+    if      (a->len == 2) return (L)fn2((const vec2 *)a->data); \
+    else if (a->len == 4) return (L)fn4((const vec4 *)a->data); \
+    else                  return (L)fnn(a->data, (int)a->len);
 
-/* (normalize v) — scale to unit length */
-L f_normalize(L t, L e) { TENS_UNARY(vecn_normalize) }
+/* (abs v) — element-wise absolute value; vec4 fast path */
+L f_vabs(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    if (a->len == 4) vec4_abs((const vec4 *)a->data, (vec4 *)out->data);
+    else             vecn_abs(a->data, a->len, out->data);
+    return box(TENS, (I)(out - tensor_heap));
+}
 
-/* (pow v exp) — element-wise v^exp */
+/* (sqrt v) — element-wise square root; vec4 fast path */
+L f_vsqrt(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    if (a->len == 4) vec4_sqrt((const vec4 *)a->data, (vec4 *)out->data);
+    else             vecn_sqrt(a->data, a->len, out->data);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (normalize v) — scale to unit length; vec2/vec4 fast paths */
+L f_normalize(L t, L e) { TENS_UNARY_DISP(vec2_normalize, vec4_normalize, vecn_normalize) }
+
+/* (pow v exp) — element-wise v^exp; vec2/vec4 fast paths */
 L f_vpow(L t, L e)
 {
     t = evlis(t, e);
     L x   = car(t);
-    L exp = car(cdr(t));
+    L xp  = car(cdr(t));
     if (T(x) != TENS) return err;
     tensor_t *a   = &tensor_heap[ord(x)];
     tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
-    vecn_pow(a->data, (float)exp, a->len, out->data);
+    float ep = (float)xp;
+    if      (a->len == 2) vec2_pow((const vec2 *)a->data, ep, (vec2 *)out->data);
+    else if (a->len == 4) vec4_pow((const vec4 *)a->data, ep, (vec4 *)out->data);
+    else                  vecn_pow(a->data, ep, a->len, out->data);
     return box(TENS, (I)(out - tensor_heap));
 }
 
@@ -508,56 +588,20 @@ L f_zero(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
-/* (dot v1 v2) — dot product → scalar */
-L f_dot(L t, L e)
-{
-    t = evlis(t, e);
-    L xa = car(t), xb = car(cdr(t));
-    if (T(xa) != TENS || T(xb) != TENS) return err;
-    tensor_t *a = &tensor_heap[ord(xa)];
-    tensor_t *b = &tensor_heap[ord(xb)];
-    return (L)vecn_dot(a->data, b->data, (int)a->len);
-}
+/* (dot v1 v2) — dot product → scalar; vec2/vec4 fast paths */
+L f_dot(L t, L e) { TENS_BINARY_SCALAR_DISP(vec2_dot, vec4_dot, vecn_dot) }
 
-/* (length v) — Euclidean length → scalar */
-L f_length(L t, L e)
-{
-    L x = car(evlis(t, e));
-    if (T(x) != TENS) return err;
-    tensor_t *a = &tensor_heap[ord(x)];
-    return (L)vecn_length(a->data, (int)a->len);
-}
+/* (length v) — Euclidean length → scalar; vec2/vec4 fast paths */
+L f_length(L t, L e) { TENS_UNARY_SCALAR_DISP(vec2_length, vec4_length, vecn_length) }
 
-/* (length2 v) — length squared → scalar (cheaper than length) */
-L f_length2(L t, L e)
-{
-    L x = car(evlis(t, e));
-    if (T(x) != TENS) return err;
-    tensor_t *a = &tensor_heap[ord(x)];
-    return (L)vecn_length_sqrd(a->data, (int)a->len);
-}
+/* (length2 v) — length squared → scalar; vec2/vec4 fast paths */
+L f_length2(L t, L e) { TENS_UNARY_SCALAR_DISP(vec2_length_sqrd, vec4_length_sqrd, vecn_length_sqrd) }
 
-/* (dist v1 v2) — Euclidean distance → scalar */
-L f_dist(L t, L e)
-{
-    t = evlis(t, e);
-    L xa = car(t), xb = car(cdr(t));
-    if (T(xa) != TENS || T(xb) != TENS) return err;
-    tensor_t *a = &tensor_heap[ord(xa)];
-    tensor_t *b = &tensor_heap[ord(xb)];
-    return (L)vecn_dist(a->data, b->data, (int)a->len);
-}
+/* (dist v1 v2) — Euclidean distance → scalar; vec2/vec4 fast paths */
+L f_dist(L t, L e) { TENS_BINARY_SCALAR_DISP(vec2_dist, vec4_dist, vecn_dist) }
 
-/* (dist2 v1 v2) — distance squared → scalar */
-L f_dist2(L t, L e)
-{
-    t = evlis(t, e);
-    L xa = car(t), xb = car(cdr(t));
-    if (T(xa) != TENS || T(xb) != TENS) return err;
-    tensor_t *a = &tensor_heap[ord(xa)];
-    tensor_t *b = &tensor_heap[ord(xb)];
-    return (L)vecn_dist_sqrd(a->data, b->data, (int)a->len);
-}
+/* (dist2 v1 v2) — distance squared → scalar; vec2/vec4 fast paths */
+L f_dist2(L t, L e) { TENS_BINARY_SCALAR_DISP(vec2_dist_sqrd, vec4_dist_sqrd, vecn_dist_sqrd) }
 
 /* (vec= v1 v2) — element-wise equality → #t or () */
 L f_veq(L t, L e)
@@ -583,7 +627,8 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"let*", f_leta},     {"lambda", f_lambda},
                      {"define", f_define},
                      {"shape", f_shape},   {"rank", f_rank},
-                     {"slice", f_slice},   {"tensor?", f_tensor_p},
+                     {"slice", f_slice},   {"head", f_head},
+                     {"tail", f_tail},     {"tensor?", f_tensor_p},
                      {"matmul", f_matmul}, {"@", f_matmul},
                      {"transpose", f_transpose}, {"T", f_transpose},
                      {"abs", f_vabs},     {"sqrt", f_vsqrt},

@@ -6,19 +6,7 @@ kanban-plugin: board
 
 ## 🧊 Backlog
 
-- [ ] Add regression tests to test_main.c for multi-byte atoms used as values
-
-- [ ] Wire r2_maths.h for vec2/vec4/mat3/mat4 fast paths on common tensor shapes
-- [ ] Implement matmul primitive using r2_maths mat_mul for general case
-- [ ] Implement scalar broadcast in arithmetic (scalar op tensor)
-- [ ] Implement head/tail sugar: head = slice 0, tail = slice 1:end
-- [ ] Update README with syntax overview and examples
-
 ## 📝 Todo
-
-- [ ] Update gc: trace and collect tensors on the tensor heap
-- [ ] Write integration tests for tensor literals, shape, rank, slice
-- [ ] Write integration tests for arithmetic and matmul on tensors
 
 ## 👨‍💻 Doing (0)
 
@@ -48,10 +36,21 @@ kanban-plugin: board
 - [x] Update parser: parse tensor literals [ elem ... ] into TENS values
 - [x] Update parser: handle (op, [args]) expression form
 - [x] Update eval: TENS values are self-evaluating (like numbers)
-- [x] Update print/printlist: display TENS values as [ e1 e2 ... ]
+- [x] Update print/printlist: display TENS values as [ e1 e2 ... ] with nested rows for rank>1
 - [x] Implement shape primitive: (shape, [t]) → vector of dimensions
 - [x] Implement rank primitive: (rank, [t]) → scalar
 - [x] Implement slice primitive: (slice, [t, i]) → element or sub-tensor at index i
 - [x] Add tensor? predicate primitive
 - [x] Update arithmetic primitives (+, -, *, /) to operate element-wise on TENS
 - [x] Fix scan() do-while to stop at [ and ] token boundaries
+- [x] Update gc: mark/compact/patch tensor heap after each REPL cycle
+- [x] Write integration tests for tensor literals, shape, rank, slice, arithmetic, matmul (51 tests)
+- [x] Implement matmul primitive using r2_maths mat_mul (mat*mat, mat*vec) with @ alias
+- [x] Implement scalar broadcast in arithmetic (scalar op tensor)
+- [x] Add transpose primitive with T alias using r2_maths mat_transpose
+- [x] Add vec= predicate, dot, length, length2, dist, dist2, normalize, abs, sqrt, pow, zero primitives via vecn_*
+- [x] Update README with syntax overview, build instructions, and full primitives table
+- [x] Add tests for all vecn primitives (62 tests total)
+- [x] Wire vec2/vec4 fast paths in dot, length, length2, dist, dist2, normalize, abs, sqrt, pow
+- [x] Implement head/tail sugar primitives
+- [x] Add regression tests for multi-byte atoms used as values (67 tests total)

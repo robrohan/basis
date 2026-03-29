@@ -1024,6 +1024,140 @@ static const char *test_tensor_veq(void)
 }
 
 /* -----------------------------------------------------------------------
+   tensor — head / tail
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_head_tail_vec(void)
+{
+    setup();
+    float d[] = {10.f, 20.f, 30.f};
+    L v = make_vec(3, d);
+
+    L h = eval(cons(atom("head"), cons(v, nil)), env);
+    r2_assert("head of vec == 10", equ(h, (L)10.0));
+
+    L tl = eval(cons(atom("tail"), cons(v, nil)), env);
+    r2_assert("tail is TENS",        T(tl) == TENS);
+    r2_assert("tail len == 2",       tensor_heap[ord(tl)].len == 2);
+    r2_assert("tail[0] == 20",       tensor_heap[ord(tl)].data[0] == 20.f);
+    r2_assert("tail[1] == 30",       tensor_heap[ord(tl)].data[1] == 30.f);
+    return NULL;
+}
+
+static const char *test_tensor_head_tail_mat(void)
+{
+    setup();
+    float d[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
+    L m = make_mat(2, 3, d);
+
+    /* head of 2x3 => first row [1 2 3] */
+    L h = eval(cons(atom("head"), cons(m, nil)), env);
+    r2_assert("head of mat is TENS",     T(h) == TENS);
+    r2_assert("head row rank == 1",      tensor_heap[ord(h)].rank == 1);
+    r2_assert("head row[0] == 1",        tensor_heap[ord(h)].data[0] == 1.f);
+    r2_assert("head row[2] == 3",        tensor_heap[ord(h)].data[2] == 3.f);
+
+    /* tail of 2x3 => [[4 5 6]] (1x3) */
+    L tl = eval(cons(atom("tail"), cons(m, nil)), env);
+    r2_assert("tail of mat is TENS",     T(tl) == TENS);
+    r2_assert("tail shape[0] == 1",      tensor_heap[ord(tl)].shape[0] == 1);
+    r2_assert("tail shape[1] == 3",      tensor_heap[ord(tl)].shape[1] == 3);
+    r2_assert("tail[0][0] == 4",         tensor_heap[ord(tl)].data[0] == 4.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   tensor — vec2/vec4 fast paths
+   --------------------------------------------------------------------- */
+
+static const char *test_tensor_fastpath_vec2(void)
+{
+    setup();
+    float a[] = {3.f, 4.f};
+    float b[] = {0.f, 0.f};
+    L va = make_vec(2, a), vb = make_vec(2, b);
+
+    r2_assert("dot vec2",     equ(eval(cons(atom("dot"),     cons(va, cons(va, nil))), env), (L)25.0));
+    r2_assert("length vec2",  equ(eval(cons(atom("length"),  cons(va, nil)),           env), (L)5.0));
+    r2_assert("length2 vec2", equ(eval(cons(atom("length2"), cons(va, nil)),           env), (L)25.0));
+    r2_assert("dist vec2",    equ(eval(cons(atom("dist"),    cons(vb, cons(va, nil))), env), (L)5.0));
+    r2_assert("dist2 vec2",   equ(eval(cons(atom("dist2"),   cons(vb, cons(va, nil))), env), (L)25.0));
+
+    L n = eval(cons(atom("normalize"), cons(va, nil)), env);
+    r2_assert("normalize vec2[0] == 0.6", tensor_heap[ord(n)].data[0] == 0.6f);
+    r2_assert("normalize vec2[1] == 0.8", tensor_heap[ord(n)].data[1] == 0.8f);
+    return NULL;
+}
+
+static const char *test_tensor_fastpath_vec4(void)
+{
+    setup();
+    float a[] = {1.f, 0.f, 0.f, 0.f};
+    float b[] = {0.f, 1.f, 0.f, 0.f};
+    L va = make_vec(4, a), vb = make_vec(4, b);
+
+    r2_assert("dot vec4 orthogonal == 0", equ(eval(cons(atom("dot"), cons(va, cons(vb, nil))), env), (L)0.0));
+    r2_assert("length vec4 unit == 1",    equ(eval(cons(atom("length"), cons(va, nil)), env), (L)1.0));
+
+    float c[] = {-1.f, 4.f, -9.f, 16.f};
+    L vc = make_vec(4, c);
+    L ab = eval(cons(atom("abs"),  cons(vc, nil)), env);
+    L sq = eval(cons(atom("sqrt"), cons(vc, nil)), env);  /* sqrt of abs vals */
+    r2_assert("abs vec4[0] == 1",  tensor_heap[ord(ab)].data[0] == 1.f);
+    r2_assert("abs vec4[2] == 9",  tensor_heap[ord(ab)].data[2] == 9.f);
+
+    float pos[] = {4.f, 9.f, 16.f, 25.f};
+    L vp = make_vec(4, pos);
+    L sr = eval(cons(atom("sqrt"), cons(vp, nil)), env);
+    r2_assert("sqrt vec4[0] == 2", tensor_heap[ord(sr)].data[0] == 2.f);
+    r2_assert("sqrt vec4[3] == 5", tensor_heap[ord(sr)].data[3] == 5.f);
+    (void)sq; (void)ab;
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   regression — multi-byte atoms used as values (not just function names)
+   --------------------------------------------------------------------- */
+
+static const char *test_utf8_atoms_as_values(void)
+{
+    setup();
+
+    /* store a number under a multi-byte key, retrieve it */
+    L def1 = cons(atom("define"),
+                  cons(atom("\xE4\xBB\x96"), cons((L)3.0, nil))); /* 他 */
+    eval(def1, env);
+    r2_assert("CJK atom as value",
+              equ(eval(atom("\xE4\xBB\x96"), env), (L)3.0));
+
+    /* use in arithmetic */
+    L add = cons(atom("+"),
+                 cons(atom("\xE4\xBB\x96"), cons((L)1.0, nil)));
+    r2_assert("CJK atom in arithmetic",
+              equ(eval(add, env), (L)4.0));
+
+    /* store under emoji, use in expression */
+    L def2 = cons(atom("define"),
+                  cons(atom("\xF0\x9F\x94\xA5"), cons((L)100.0, nil))); /* 🔥 */
+    eval(def2, env);
+    L mul = cons(atom("*"),
+                 cons(atom("\xF0\x9F\x94\xA5"), cons((L)2.0, nil)));
+    r2_assert("emoji atom in arithmetic",
+              equ(eval(mul, env), (L)200.0));
+
+    /* store a tensor under a multi-byte name */
+    float d[] = {1.f, 2.f, 3.f};
+    L v = make_vec(3, d);
+    L def3 = cons(atom("define"), cons(atom("\xCF\x80\xCF\x80"), cons(v, nil))); /* ππ */
+    eval(def3, env);
+    L sh = eval(cons(atom("shape"), cons(atom("\xCF\x80\xCF\x80"), nil)), env);
+    r2_assert("multi-byte atom stores tensor",
+              tensor_heap[ord(sh)].data[0] == 3.f);
+
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    eval — undefined symbol returns ERR
    --------------------------------------------------------------------- */
 
@@ -1103,6 +1237,11 @@ static const char *all_tests(void)
     r2_run_test(test_tensor_length);
     r2_run_test(test_tensor_dist);
     r2_run_test(test_tensor_veq);
+    r2_run_test(test_tensor_head_tail_vec);
+    r2_run_test(test_tensor_head_tail_mat);
+    r2_run_test(test_tensor_fastpath_vec2);
+    r2_run_test(test_tensor_fastpath_vec4);
+    r2_run_test(test_utf8_atoms_as_values);
     return NULL;
 }
 

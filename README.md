@@ -63,6 +63,8 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 | `shape` | `(shape [[1 2][3 4]])` | `[2 2]` | Dimension sizes as a vector |
 | `rank` | `(rank [[1 2][3 4]])` | `2` | Number of dimensions |
 | `slice` | `(slice [10 20 30] 1)` | `20` | Element or row at index i |
+| `head` | `(head [10 20 30])` | `10` | First element or row |
+| `tail` | `(tail [10 20 30])` | `[20 30]` | All elements after the first |
 | `tensor?` | `(tensor? [1 2])` | `#t` | True if x is a tensor |
 
 ### Matrix operations
