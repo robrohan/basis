@@ -138,5 +138,6 @@ L f_rank(L t, L e);
 L f_slice(L t, L e);
 L f_tensor_p(L t, L e);
 L f_matmul(L t, L e);
+L f_transpose(L t, L e);
 
 #endif /* TINYLISP_H */

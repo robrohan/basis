@@ -406,10 +406,10 @@ L f_tensor_p(L t, L e)
     return T(x) == TENS ? tru : nil;
 }
 
-/* (matmul A B) → matrix product of two rank-2 tensors (or mat-vec for rank-1 B)
-   A is (r1 x c1), B is (r2 x c2); requires c1 == r2.
-   If B is rank-1 (a vector of length r2), treats it as a column vector and
-   returns a rank-1 result of length r1. */
+/* (matmul A B) / (@ A B) — matrix product.
+   Accepts rank-2 * rank-2, rank-2 * rank-1 (mat*col-vec), and
+   rank-1 * rank-2 (row-vec*mat).  Result is rank-1 when either
+   argument is rank-1, otherwise rank-2. */
 L f_matmul(L t, L e)
 {
     t = evlis(t, e);
@@ -418,12 +418,15 @@ L f_matmul(L t, L e)
     if (T(xa) != TENS || T(xb) != TENS) return err;
     tensor_t *a = &tensor_heap[ord(xa)];
     tensor_t *b = &tensor_heap[ord(xb)];
-    if (a->rank != 2) return err;
-    /* accept rank-1 B as a column vector */
-    I r1 = a->shape[0], c1 = a->shape[1];
+
+    /* determine effective dimensions, treating rank-1 as a row (1×n) or
+       column (n×1) vector depending on position */
+    I r1 = (a->rank == 1) ? 1        : a->shape[0];
+    I c1 = (a->rank == 1) ? a->len   : a->shape[1];
     I r2 = (b->rank == 2) ? b->shape[0] : b->len;
     I c2 = (b->rank == 2) ? b->shape[1] : 1;
     if (c1 != r2) return err;
+
     I out_len = r1 * c2;
     float *out_data = malloc(out_len * sizeof(float));
     if (!out_data) abort();
@@ -432,15 +435,33 @@ L f_matmul(L t, L e)
             (unsigned char)r2, (unsigned char)c2,
             out_data);
     L result;
-    if (b->rank == 1) {
-        /* return a rank-1 vector */
-        I sh[1]; sh[0] = r1;
-        result = box(TENS, (I)(alloc_tensor(1, sh, r1, out_data) - tensor_heap));
+    /* return rank-1 when either input was a vector */
+    if (a->rank == 1 || b->rank == 1) {
+        I len = (a->rank == 1) ? c2 : r1;
+        I sh[1]; sh[0] = len;
+        result = box(TENS, (I)(alloc_tensor(1, sh, len, out_data) - tensor_heap));
     } else {
         I sh[2]; sh[0] = r1; sh[1] = c2;
         result = box(TENS, (I)(alloc_tensor(2, sh, out_len, out_data) - tensor_heap));
     }
     free(out_data);
+    return result;
+}
+
+/* (transpose M) → rank-2 tensor with rows and columns swapped */
+L f_transpose(L t, L e)
+{
+    L x = car(evlis(t, e));
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    if (a->rank != 2) return err;
+    I r = a->shape[0], c = a->shape[1];
+    float *out = malloc(r * c * sizeof(float));
+    if (!out) abort();
+    mat_transpose(a->data, (unsigned char)r, (unsigned char)c, out);
+    I sh[2]; sh[0] = c; sh[1] = r;
+    L result = box(TENS, (I)(alloc_tensor(2, sh, r * c, out) - tensor_heap));
+    free(out);
     return result;
 }
 
@@ -459,8 +480,9 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},     {"quote", f_quote},
                      {"shape", f_shape},   {"rank", f_rank},
                      {"slice", f_slice},   {"tensor?", f_tensor_p},
                      {"matmul", f_matmul}, {"@", f_matmul},
+                     {"transpose", f_transpose},
                      {0}};
-int prim_count = 28;
+int prim_count = 29;
 
 void register_prim(const char *s, L (*f)(L, L))
 {

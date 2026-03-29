@@ -874,6 +874,43 @@ static const char *test_tensor_matmul_matvec(void)
     return NULL;
 }
 
+static const char *test_tensor_matmul_vecmat(void)
+{
+    setup();
+    /* [1 2 3] (1x3) * [[1 0][0 1][2 3]] (3x2) => [7 11] */
+    float v[] = {1.f, 2.f, 3.f};
+    float b[] = {1.f, 0.f, 0.f, 1.f, 2.f, 3.f};
+    L mv = make_vec(3, v);
+    L mb = make_mat(3, 2, b);
+
+    L expr = cons(atom("@"), cons(mv, cons(mb, nil)));
+    L r = eval(expr, env);
+    r2_assert("vec-mat result is TENS",  T(r) == TENS);
+    r2_assert("vec-mat rank == 1",       tensor_heap[ord(r)].rank == 1);
+    r2_assert("result[0] == 7",          tensor_heap[ord(r)].data[0] == 7.f);
+    r2_assert("result[1] == 11",         tensor_heap[ord(r)].data[1] == 11.f);
+    return NULL;
+}
+
+static const char *test_tensor_transpose(void)
+{
+    setup();
+    /* transpose [[1 2 3][4 5 6]] (2x3) => [[1 4][2 5][3 6]] (3x2) */
+    float a[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
+    L m = make_mat(2, 3, a);
+
+    L expr = cons(atom("transpose"), cons(m, nil));
+    L r = eval(expr, env);
+    r2_assert("transpose is TENS",       T(r) == TENS);
+    r2_assert("transpose shape[0] == 3", tensor_heap[ord(r)].shape[0] == 3);
+    r2_assert("transpose shape[1] == 2", tensor_heap[ord(r)].shape[1] == 2);
+    r2_assert("[0,0] == 1",              tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("[0,1] == 4",              tensor_heap[ord(r)].data[1] == 4.f);
+    r2_assert("[1,0] == 2",              tensor_heap[ord(r)].data[2] == 2.f);
+    r2_assert("[2,1] == 6",              tensor_heap[ord(r)].data[5] == 6.f);
+    return NULL;
+}
+
 /* -----------------------------------------------------------------------
    eval — undefined symbol returns ERR
    --------------------------------------------------------------------- */
@@ -943,6 +980,8 @@ static const char *all_tests(void)
     r2_run_test(test_tensor_matmul_square);
     r2_run_test(test_tensor_matmul_rect);
     r2_run_test(test_tensor_matmul_matvec);
+    r2_run_test(test_tensor_matmul_vecmat);
+    r2_run_test(test_tensor_transpose);
     return NULL;
 }
 
