@@ -19,6 +19,7 @@ help:
 	@echo "make clean"
 	@echo "make fetch"
 	@echo "make build"
+	@echo "make test"
 	@echo "make release_cli"
 	@echo "make run"
 
@@ -44,6 +45,17 @@ build:
 		-I./vendor \
 		-I./src \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm
+
+test:
+	mkdir -p ./build/$(PLATFORM)/$(CPU)/
+
+	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
+		./src/tinylisp.c ./src/test_main.c \
+		-I./vendor \
+		-I./src \
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm
+
+	./build/$(PLATFORM)/$(CPU)/$(APP).test
 
 release_cli:
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/

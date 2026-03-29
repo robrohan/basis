@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gcc (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y gcc
+
+      - name: Fetch vendor headers
+        run: make fetch
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: make test
