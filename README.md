@@ -1,6 +1,6 @@
-# Tensp
+# 𝔹asis
 
-A Lisp interpreter where tensors (scalars, vectors, matrices, N-dimensional arrays) are the fundamental data type. Code and data share the same tensor structure, preserving Lisp's homoiconicity.
+A Lisp interpreter where tensors (scalars, vectors, matrices, N-dimensional arrays) are the fundamental data type. Code and data share the same tensor structure, trying to preserve Lisp's homoiconicity.
 
 ## Syntax
 
@@ -92,6 +92,11 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 ## Examples
 
 ```lisp
+
+(define 🥧 3.14)
+(* 🥧 3)
+; => 9.42
+
 ; dot product of two vectors
 (dot [1 2 3] [4 5 6])
 ; => 32
