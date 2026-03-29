@@ -16,7 +16,8 @@ int main(void)
 
     while (1)
     {
-        printf("\n%u>", sp - hp / 8);
+        printf("\n%u> ", sp - hp / 8);
+        fflush(stdout);
         print(eval(Read(), env));
         gc();
     }
