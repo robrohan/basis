@@ -34,3 +34,8 @@ kanban-plugin: board
 ## ✅ Done
 
 **Complete**
+- [x] Include r2_strings.h and add R2_STRINGS_IMPLEMENTATION to one .c file
+- [x] Update scanner: use utf8_len() to detect multi-byte sequences and collect all bytes before token boundary checks
+- [x] Update atom buffer: ensure buf[] is large enough for multi-byte atom names (emoji = 4 bytes each)
+- [x] Update atom interning: verify strcmp/strlen still work correctly on raw UTF-8 bytes in the heap
+- [x] Write tests: define and call lambdas with emoji names (e.g. 🔥, λ, π)

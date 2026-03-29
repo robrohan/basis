@@ -1,3 +1,5 @@
+#define R2_STRINGS_IMPLEMENTATION
+#include "r2_strings.h"
 #include "tinylisp.h"
 
 /* hp: top of the atom heap pointer, A+hp with hp=0 points to the first atom string in cell[]
@@ -331,8 +333,8 @@ L eval(L x, L e)
     return T(x) == ATOM ? assoc(x, e) : T(x) == CONS ? apply(eval(car(x), e), cdr(x), e) : x;
 }
 
-/* tokenization buffer and the next character that we are looking at */
-char buf[40];
+/* tokenization buffer: 256 bytes accommodates atoms up to ~64 emoji (4 bytes each) */
+char buf[256];
 int see = ' ';
 
 /* advance to the next character */
@@ -345,7 +347,7 @@ void look(void)
 }
 
 /* return nonzero if we are looking at character c, ' ' means any white space */
-I seeing(char c)
+I seeing(int c)
 {
     return c == ' ' ? see > 0 && see <= c : see == c;
 }
@@ -365,11 +367,16 @@ char scan(void)
     while (seeing(' '))
         look();
     if (seeing('(') || seeing(')') || seeing('\''))
-        buf[i++] = get();
+        buf[i++] = (char)get();
     else
-        do
-            buf[i++] = get();
-        while (i < 39 && !seeing('(') && !seeing(')') && !seeing(' '));
+        do {
+            /* collect all bytes of the current UTF-8 character before checking
+               for token boundaries. utf8_len returns 1 for plain ASCII. */
+            int bytes = utf8_len((char)see);
+            int b;
+            for (b = 0; b < bytes && i < 255; b++)
+                buf[i++] = (char)get();
+        } while (i < 255 && !seeing('(') && !seeing(')') && !seeing(' '));
     buf[i] = 0;
     return *buf;
 }
