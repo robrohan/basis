@@ -121,6 +121,7 @@ L bind(L v, L t, L e);
 L reduce(L f, L t, L e);
 L apply(L f, L t, L e);
 
+char scan(void);
 L parse(void);
 L Read(void);
 L list(void);
