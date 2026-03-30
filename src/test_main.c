@@ -1250,6 +1250,62 @@ static const char *test_make_tensor_expr_in_matrix(void)
 }
 
 /* -----------------------------------------------------------------------
+   homoiconicity -- tensor literals as code-as-data
+   --------------------------------------------------------------------- */
+
+static const char *test_eval_quoted_tensor(void)
+{
+    setup();
+    /* (eval '[1 2 3]) - quote prevents evaluation, eval triggers it */
+    L mt   = cons(atom("make-tensor"), cons((L)1.0, cons((L)2.0, cons((L)3.0, nil))));
+    L expr = cons(atom("eval"), cons(cons(atom("quote"), cons(mt, nil)), nil));
+    L r = eval(expr, env);
+    r2_assert("quoted eval: is TENS",    T(r) == TENS);
+    r2_assert("quoted eval: data[0]==1", tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("quoted eval: data[2]==3", tensor_heap[ord(r)].data[2] == 3.f);
+    return NULL;
+}
+
+static const char *test_define_code_eval_later(void)
+{
+    setup();
+    /* (define code '[(+ 3 x) x]) then (define x 4) then (eval code)
+       the expression is stored unevaluated and uses whatever x is at eval time */
+    L mt     = cons(atom("make-tensor"),
+                    cons(cons(atom("+"), cons((L)3.0, cons(atom("x"), nil))),
+                         cons(atom("x"), nil)));
+    L def_code = cons(atom("define"),
+                      cons(atom("code"), cons(cons(atom("quote"), cons(mt, nil)), nil)));
+    eval(def_code, env);
+    L def_x = cons(atom("define"), cons(atom("x"), cons((L)4.0, nil)));
+    eval(def_x, env);
+    L expr = cons(atom("eval"), cons(atom("code"), nil));
+    L r = eval(expr, env);
+    r2_assert("deferred: is TENS",    T(r) == TENS);
+    r2_assert("deferred: data[0]==7", tensor_heap[ord(r)].data[0] == 7.f);
+    r2_assert("deferred: data[1]==4", tensor_heap[ord(r)].data[1] == 4.f);
+    return NULL;
+}
+
+static const char *test_lambda_tensor_body(void)
+{
+    setup();
+    /* (define make-row (lambda (a b) [a b])) then (make-row 5 6) => [5 6] */
+    L body = cons(atom("make-tensor"), cons(atom("a"), cons(atom("b"), nil)));
+    L lam  = cons(atom("lambda"),
+                  cons(cons(atom("a"), cons(atom("b"), nil)),
+                       cons(body, nil)));
+    L def  = cons(atom("define"), cons(atom("make-row"), cons(lam, nil)));
+    eval(def, env);
+    L call = cons(atom("make-row"), cons((L)5.0, cons((L)6.0, nil)));
+    L r = eval(call, env);
+    r2_assert("lambda body: is TENS",    T(r) == TENS);
+    r2_assert("lambda body: data[0]==5", tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("lambda body: data[1]==6", tensor_heap[ord(r)].data[1] == 6.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    Test runner
    --------------------------------------------------------------------- */
 
@@ -1327,6 +1383,9 @@ static const char *all_tests(void)
     r2_run_test(test_make_tensor_var);
     r2_run_test(test_make_tensor_stack);
     r2_run_test(test_make_tensor_expr_in_matrix);
+    r2_run_test(test_eval_quoted_tensor);
+    r2_run_test(test_define_code_eval_later);
+    r2_run_test(test_lambda_tensor_body);
     return NULL;
 }
 

@@ -724,8 +724,8 @@ L f_gc(L t, L e)
 }
 
 /* (make-tensor e1 e2 ...) -- runtime backend for [ ] tensor literals.
-   All scalars  → rank-1 vector of length n.
-   All same-shape rank-k tensors → rank-(k+1) tensor stacked along axis 0.
+   All scalars                   -> rank-1 vector of length n.
+   All same-shape rank-k tensors -> rank-(k+1) tensor stacked along axis 0.
    Uses car/cdr to walk the evaluated list so no local L[] array is needed,
    which avoids strict-aliasing problems with the T() NaN-boxing macro. */
 L f_make_tensor(L t, L e)
@@ -786,7 +786,7 @@ L f_make_tensor(L t, L e)
     }
     else
     {
-        /* all elements must be scalars → rank-1 vector */
+        /* all elements must be scalars -> rank-1 vector */
         n = 0;
         tmp = t;
         while (!is_nil(tmp))
@@ -837,6 +837,7 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"let*", f_leta},
                                 {"lambda", f_lambda},
                                 {"define", f_define},
+                                {"def", f_define},
                                 {"shape", f_shape},
                                 {"rank", f_rank},
                                 {"slice", f_slice},
@@ -861,7 +862,7 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"gc", f_gc},
                                 {"make-tensor", f_make_tensor},
                                 {0}};
-int prim_count = 44;
+int prim_count = 45;
 
 void register_prim(const char *s, L (*f)(L, L))
 {

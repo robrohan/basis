@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define MAX_PRIMS    128
-#define MAX_TENSORS  256  /* max live tensors; increase as needed */
+#define MAX_TENSORS  256  /* max live tensors */
 #define MAX_RANK     8    /* max tensor dimensions */
 
 /* we only need two types to implement a Lisp interpreter:
@@ -33,7 +33,7 @@ typedef uint32_t I;
 typedef double   L;
 
 /* T(x) returns the tag bits of a NaN-boxed Lisp expression x */
-#define T(x) (*(uint64_t *)&(x) >> 48)
+#define T(x) (*(uint64_t *)&(x) >> 0x30)
 
 /* address of the atom heap is at the bottom of the cell stack */
 #define A (char *)cell
@@ -98,22 +98,6 @@ L f_if(L t, L e);
 L f_leta(L t, L e);
 L f_lambda(L t, L e);
 L f_define(L t, L e);
-
-// struct
-// {
-//     const char *s;
-//     L (*f)(L, L);
-// } prim[] = {{"eval", f_eval},     {"quote", f_quote},
-//             {"cons", f_cons},     {"car", f_car},
-//             {"cdr", f_cdr},       {"+", f_add},
-//             {"-", f_sub},         {"*", f_mul},
-//             {"/", f_div},         {"int", f_int},
-//             {"<", f_lt},          {"eq?", f_eq},
-//             {"pair?", f_pair},    {"or", f_or},
-//             {"and", f_and},       {"not", f_not},
-//             {"cond", f_cond},     {"if", f_if},
-//             {"let*", f_leta},     {"lambda", f_lambda},
-//             {"define", f_define}, {0}};
 
 /////////////////////////////////////
 
