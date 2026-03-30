@@ -407,7 +407,7 @@ tensor_t *alloc_tensor(I rank, const I *shape, I len, const float *data)
     return t;
 }
 
-/* (shape t) → rank-1 tensor of dimension sizes */
+/* (shape t) -> rank-1 tensor of dimension sizes */
 L f_shape(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -422,14 +422,14 @@ L f_shape(L t, L e)
     return box(TENS, (I)(alloc_tensor(1, s, tens->rank, sd) - tensor_heap));
 }
 
-/* (rank t) → scalar */
+/* (rank t) -> scalar */
 L f_rank(L t, L e)
 {
     L x = car(evlis(t, e));
     return T(x) == TENS ? (L)tensor_heap[ord(x)].rank : err;
 }
 
-/* (slice t i) → element (scalar) or sub-tensor (row) at index i along axis 0 */
+/* (slice t i) -> element (scalar) or sub-tensor (row) at index i along axis 0 */
 L f_slice(L t, L e)
 {
     I i;
@@ -453,7 +453,7 @@ L f_slice(L t, L e)
     return box(TENS, (I)(alloc_tensor(tens->rank - 1, sh, row, tens->data + i * row) - tensor_heap));
 }
 
-/* (head t) → first element or row (sugar for slice 0) */
+/* (head t) -> first element or row (sugar for slice 0) */
 L f_head(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -470,7 +470,7 @@ L f_head(L t, L e)
     return box(TENS, (I)(alloc_tensor(tens->rank - 1, sh, row, tens->data) - tensor_heap));
 }
 
-/* (tail t) → all elements after the first (rank-1: subvector, rank-2: submatrix) */
+/* (tail t) -> all elements after the first (rank-1: subvector, rank-2: submatrix) */
 L f_tail(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -489,7 +489,7 @@ L f_tail(L t, L e)
     return box(TENS, (I)(alloc_tensor(tens->rank, sh, new_len, tens->data + row) - tensor_heap));
 }
 
-/* (tensor? x) → #t if x is a tensor */
+/* (tensor? x) -> #t if x is a tensor */
 L f_tensor_p(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -523,7 +523,9 @@ L f_matmul(L t, L e)
     float *out_data = malloc(out_len * sizeof(float));
     if (!out_data)
         abort();
+    
     mat_mul(a->data, b->data, (unsigned char)r1, (unsigned char)c1, (unsigned char)r2, (unsigned char)c2, out_data);
+
     L result;
     /* return rank-1 when either input was a vector */
     if (a->rank == 1 || b->rank == 1)
@@ -544,7 +546,7 @@ L f_matmul(L t, L e)
     return result;
 }
 
-/* (transpose M) → rank-2 tensor with rows and columns swapped */
+/* (transpose M) -> rank-2 tensor with rows and columns swapped */
 L f_transpose(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -692,10 +694,10 @@ L f_length2(L t, L e){TENS_UNARY_SCALAR_DISP(vec2_length_sqrd, vec4_length_sqrd,
 /* (dist v1 v2) — Euclidean distance → scalar; vec2/vec4 fast paths */
 L f_dist(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist, vec4_dist, vecn_dist)}
 
-/* (dist2 v1 v2) — distance squared → scalar; vec2/vec4 fast paths */
+/* (dist2 v1 v2) — distance squared -> scalar; vec2/vec4 fast paths */
 L f_dist2(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist_sqrd, vec4_dist_sqrd, vecn_dist_sqrd)}
 
-/* (vec= v1 v2) — element-wise equality → #t or () */
+/* (vec= v1 v2) — element-wise equality -> #t or () */
 L f_veq(L t, L e)
 {
     t = evlis(t, e);
@@ -751,7 +753,7 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"dist2", f_dist2},
                                 {"vec=", f_veq},
                                 {0}};
-int prim_count = 41;
+int prim_count = 42;
 
 void register_prim(const char *s, L (*f)(L, L))
 {
