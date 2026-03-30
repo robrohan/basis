@@ -723,6 +723,98 @@ L f_gc(L t, L e)
     return nil;
 }
 
+/* (make-tensor e1 e2 ...) -- runtime backend for [ ] tensor literals.
+   All scalars  → rank-1 vector of length n.
+   All same-shape rank-k tensors → rank-(k+1) tensor stacked along axis 0.
+   Uses car/cdr to walk the evaluated list so no local L[] array is needed,
+   which avoids strict-aliasing problems with the T() NaN-boxing macro. */
+L f_make_tensor(L t, L e)
+{
+    I n, k, elem_rank, elem_len, j, m;
+    I new_shape[MAX_RANK];
+    float *data;
+    tensor_t *ft, *at, *out;
+    L tmp, item;
+
+    t = evlis(t, e);
+    if (is_nil(t))
+        return err;
+
+    item = car(t);
+
+    if (T(item) == TENS)
+    {
+        /* all elements must be tensors sharing the same rank and shape */
+        ft = &tensor_heap[ord(item)];
+        elem_rank = ft->rank;
+        elem_len = ft->len;
+        n = 0;
+        tmp = t;
+        while (!is_nil(tmp))
+        {
+            item = car(tmp);
+            if (T(item) != TENS)
+                return err;
+            at = &tensor_heap[ord(item)];
+            if (at->rank != elem_rank || at->len != elem_len)
+                return err;
+            n++;
+            tmp = cdr(tmp);
+        }
+        if (elem_rank + 1 > MAX_RANK)
+            return err;
+        new_shape[0] = n;
+        for (j = 0; j < elem_rank; j++)
+            new_shape[j + 1] = ft->shape[j];
+        I new_len = n * elem_len;
+        data = malloc(new_len * sizeof(float));
+        if (!data)
+            abort();
+        k = 0;
+        tmp = t;
+        while (!is_nil(tmp))
+        {
+            item = car(tmp);
+            at = &tensor_heap[ord(item)];
+            for (m = 0; m < at->len; m++)
+                data[k++] = at->data[m];
+            tmp = cdr(tmp);
+        }
+        out = alloc_tensor(elem_rank + 1, new_shape, new_len, data);
+        free(data);
+        return box(TENS, (I)(out - tensor_heap));
+    }
+    else
+    {
+        /* all elements must be scalars → rank-1 vector */
+        n = 0;
+        tmp = t;
+        while (!is_nil(tmp))
+        {
+            item = car(tmp);
+            if (T(item) == TENS)
+                return err;
+            n++;
+            tmp = cdr(tmp);
+        }
+        data = malloc(n * sizeof(float));
+        if (!data)
+            abort();
+        k = 0;
+        tmp = t;
+        while (!is_nil(tmp))
+        {
+            item = car(tmp);
+            data[k++] = (float)item;
+            tmp = cdr(tmp);
+        }
+        new_shape[0] = n;
+        out = alloc_tensor(1, new_shape, n, data);
+        free(data);
+        return box(TENS, (I)(out - tensor_heap));
+    }
+}
+
 /* table of Lisp primitives, each has a name s and function pointer f */
 struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"quote", f_quote},
@@ -767,8 +859,9 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"dist2", f_dist2},
                                 {"vec=", f_veq},
                                 {"gc", f_gc},
+                                {"make-tensor", f_make_tensor},
                                 {0}};
-int prim_count = 43;
+int prim_count = 44;
 
 void register_prim(const char *s, L (*f)(L, L))
 {
@@ -893,50 +986,23 @@ L atomic(void)
     return (sscanf(buf, "%lg%n", &n, &i) > 0 && !buf[i]) ? n : atom(buf);
 }
 
-/* parse a tensor literal [ e1 e2 ... ] or [ [r1...] [r2...] ]
-   called after [ has already been scanned into buf */
+/* collect elements of a tensor literal until ']', recursing into parse()
+   so that any expression -- atom, number, (s-expr), or nested [tensor] --
+   is accepted as an element */
+static L tensor_elems(void)
+{
+    L x;
+    if (scan() == ']')
+        return nil;
+    x = parse();
+    return cons(x, tensor_elems());
+}
+
+/* parse [ e1 e2 ... ] into a (make-tensor e1 e2 ...) CONS form.
+   evaluation happens later, so sub-expressions like (+ 3 x) work fine. */
 L tensor_lit(void)
 {
-    float data[1024];
-    I count = 0, inner_size = 0, is_matrix = 0, r;
-    I shape[2];
-
-    while (scan() != ']')
-    {
-        if (*buf == '[')
-        {
-            /* nested row for rank-2 matrix */
-            I row_start = count;
-            is_matrix = 1;
-            while (scan() != ']')
-            {
-                L x = atomic();
-                if (count < 1024)
-                    data[count++] = (float)x;
-            }
-            if (inner_size == 0)
-                inner_size = count - row_start;
-        }
-        else
-        {
-            L x = atomic();
-            if (count < 1024)
-                data[count++] = (float)x;
-        }
-    }
-
-    if (is_matrix && inner_size > 0)
-    {
-        shape[0] = count / inner_size;
-        shape[1] = inner_size;
-        r = 2;
-    }
-    else
-    {
-        shape[0] = count;
-        r = 1;
-    }
-    return box(TENS, (I)(alloc_tensor(r, shape, count, data) - tensor_heap));
+    return cons(atom("make-tensor"), tensor_elems());
 }
 
 /* return a parsed Lisp expression */

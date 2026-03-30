@@ -152,5 +152,7 @@ L f_length2(L t, L e);
 L f_dist(L t, L e);
 L f_dist2(L t, L e);
 L f_veq(L t, L e);
+L f_gc(L t, L e);
+L f_make_tensor(L t, L e);
 
 #endif /* TINYLISP_H */

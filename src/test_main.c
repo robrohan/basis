@@ -14,6 +14,7 @@ static void setup(void)
     I i;
     hp  = 0;
     sp  = N;
+    th  = 0;
     nil = box(NIL, 0);
     err = atom("ERR");
     tru = atom("#t");
@@ -1170,6 +1171,85 @@ static const char *test_eval_undefined(void)
 }
 
 /* -----------------------------------------------------------------------
+   make-tensor primitive
+   --------------------------------------------------------------------- */
+
+static const char *test_make_tensor_scalars(void)
+{
+    setup();
+    /* (make-tensor 1 2 3) - three scalars become a rank-1 vector */
+    L expr = cons(atom("make-tensor"), cons((L)1.0, cons((L)2.0, cons((L)3.0, nil))));
+    L r = eval(expr, env);
+    r2_assert("scalars: is TENS",    T(r) == TENS);
+    r2_assert("scalars: rank == 1",  tensor_heap[ord(r)].rank == 1);
+    r2_assert("scalars: len == 3",   tensor_heap[ord(r)].len == 3);
+    r2_assert("scalars: data[0]==1", tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("scalars: data[1]==2", tensor_heap[ord(r)].data[1] == 2.f);
+    r2_assert("scalars: data[2]==3", tensor_heap[ord(r)].data[2] == 3.f);
+    return NULL;
+}
+
+static const char *test_make_tensor_expr(void)
+{
+    setup();
+    /* (make-tensor (+ 1 2) 4) - s-expression as a tensor element */
+    L add  = cons(atom("+"), cons((L)1.0, cons((L)2.0, nil)));
+    L expr = cons(atom("make-tensor"), cons(add, cons((L)4.0, nil)));
+    L r = eval(expr, env);
+    r2_assert("expr: is TENS",    T(r) == TENS);
+    r2_assert("expr: data[0]==3", tensor_heap[ord(r)].data[0] == 3.f);
+    r2_assert("expr: data[1]==4", tensor_heap[ord(r)].data[1] == 4.f);
+    return NULL;
+}
+
+static const char *test_make_tensor_var(void)
+{
+    setup();
+    /* (define x 5) then (make-tensor x 2 3) - variable lookup inside tensor */
+    L def  = cons(atom("define"), cons(atom("x"), cons((L)5.0, nil)));
+    eval(def, env);
+    L expr = cons(atom("make-tensor"), cons(atom("x"), cons((L)2.0, cons((L)3.0, nil))));
+    L r = eval(expr, env);
+    r2_assert("var: is TENS",    T(r) == TENS);
+    r2_assert("var: data[0]==5", tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("var: data[1]==2", tensor_heap[ord(r)].data[1] == 2.f);
+    r2_assert("var: data[2]==3", tensor_heap[ord(r)].data[2] == 3.f);
+    return NULL;
+}
+
+static const char *test_make_tensor_stack(void)
+{
+    setup();
+    /* (make-tensor (make-tensor 1 2) (make-tensor 3 4)) - stacks rows into [[1 2][3 4]] */
+    L row0 = cons(atom("make-tensor"), cons((L)1.0, cons((L)2.0, nil)));
+    L row1 = cons(atom("make-tensor"), cons((L)3.0, cons((L)4.0, nil)));
+    L expr = cons(atom("make-tensor"), cons(row0, cons(row1, nil)));
+    L r = eval(expr, env);
+    r2_assert("stack: is TENS",       T(r) == TENS);
+    r2_assert("stack: rank == 2",     tensor_heap[ord(r)].rank == 2);
+    r2_assert("stack: shape[0] == 2", tensor_heap[ord(r)].shape[0] == 2);
+    r2_assert("stack: shape[1] == 2", tensor_heap[ord(r)].shape[1] == 2);
+    r2_assert("stack: data[0] == 1",  tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("stack: data[3] == 4",  tensor_heap[ord(r)].data[3] == 4.f);
+    return NULL;
+}
+
+static const char *test_make_tensor_expr_in_matrix(void)
+{
+    setup();
+    /* The motivating use case: define x=3, build [(+ 3 x) x] which should give [6 3] */
+    L def  = cons(atom("define"), cons(atom("x"), cons((L)3.0, nil)));
+    eval(def, env);
+    L add  = cons(atom("+"), cons((L)3.0, cons(atom("x"), nil)));
+    L expr = cons(atom("make-tensor"), cons(add, cons(atom("x"), nil)));
+    L r = eval(expr, env);
+    r2_assert("mat-expr: is TENS",    T(r) == TENS);
+    r2_assert("mat-expr: data[0]==6", tensor_heap[ord(r)].data[0] == 6.f);
+    r2_assert("mat-expr: data[1]==3", tensor_heap[ord(r)].data[1] == 3.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    Test runner
    --------------------------------------------------------------------- */
 
@@ -1242,6 +1322,11 @@ static const char *all_tests(void)
     r2_run_test(test_tensor_fastpath_vec2);
     r2_run_test(test_tensor_fastpath_vec4);
     r2_run_test(test_utf8_atoms_as_values);
+    r2_run_test(test_make_tensor_scalars);
+    r2_run_test(test_make_tensor_expr);
+    r2_run_test(test_make_tensor_var);
+    r2_run_test(test_make_tensor_stack);
+    r2_run_test(test_make_tensor_expr_in_matrix);
     return NULL;
 }
 
