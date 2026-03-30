@@ -84,5 +84,3 @@
 ; ---- nested expressions ----
 ; => [7 10 13]
 (+ [1 2 3] (* [2 2 2] [3 4 5]))
-
-(quote Done)

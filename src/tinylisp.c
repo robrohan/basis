@@ -9,7 +9,11 @@
    safety invariant: hp <= sp<<3 */
 I hp = 0, sp = N;
 
-/* atom, primitive, cons, closure, nil, and tensor tags for NaN boxing */
+/*
+    atom, primitive, cons, closure, nil, and tensor tags for NaN boxing
+    Basically, this uses the highorder bits to create types within a 64 bit
+    value, and uses the lower 32 bits for the values. See box()
+*/
 const I ATOM = 0x7ff8, PRIM = 0x7ff9, CONS = 0x7ffa, CLOS = 0x7ffb, NIL = 0x7ffc, TENS = 0x7ffd;
 
 /* tensor heap: pool of tensor_t structs; th is the next free slot.
@@ -31,13 +35,14 @@ L nil, tru, err, env;
 L box(I t, I i)
 {
     L x = 0;
-    *(uint64_t *)&x = (uint64_t)t << 48 | i;
+    *(uint64_t *)&x = (uint64_t)t << 0x30 | i;
     return x;
 }
 
+/* narrowed to 32 bits, removing the tag from the 64 bit number */
 I ord(L x)
 {
-    return (I)(*(uint64_t *)&x); /* narrowed to 32 bits, removing the tag */
+    return (I)(*(uint64_t *)&x);
 }
 
 L num(L n)
@@ -523,7 +528,7 @@ L f_matmul(L t, L e)
     float *out_data = malloc(out_len * sizeof(float));
     if (!out_data)
         abort();
-    
+
     mat_mul(a->data, b->data, (unsigned char)r1, (unsigned char)c1, (unsigned char)r2, (unsigned char)c2, out_data);
 
     L result;
@@ -709,6 +714,15 @@ L f_veq(L t, L e)
     return vecn_equals(a->data, b->data, (int)a->len) ? tru : nil;
 }
 
+/* (gc) — force a garbage collection cycle, returns () */
+L f_gc(L t, L e)
+{
+    (void)t;
+    (void)e;
+    gc();
+    return nil;
+}
+
 /* table of Lisp primitives, each has a name s and function pointer f */
 struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"quote", f_quote},
@@ -752,8 +766,9 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"dist", f_dist},
                                 {"dist2", f_dist2},
                                 {"vec=", f_veq},
+                                {"gc", f_gc},
                                 {0}};
-int prim_count = 42;
+int prim_count = 43;
 
 void register_prim(const char *s, L (*f)(L, L))
 {
@@ -941,7 +956,7 @@ void printlist(L t)
             break;
         if (T(t) != CONS)
         {
-            printf(" . ");
+            printf(" ");
             print(t);
             break;
         }
@@ -1006,14 +1021,17 @@ void print(L x)
         printf("%.10lg", x);
 }
 
-/* garbage collection removes temporary cells, keeps global environment */
+/* -----------------------------
+garbage collection removes temporary cells, keeps global environment
+needs work
+------------------------------- */
 void gc(void)
 {
     I i;
-    /* --- cell GC: discard everything above the environment --- */
+    /* cell GC: discard everything above the environment */
     sp = ord(env);
 
-    /* --- tensor GC: mark / compact / patch --- */
+    /* tensor GC: mark / compact / patch */
     if (th == 0)
         return;
 
