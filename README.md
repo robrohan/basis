@@ -58,8 +58,8 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 
 ### Tensor constructors and inspection
 
-|Tested | Primitive | Example | Result | Description |
-|---|---|---|---|
+| Tested | Primitive | Example | Result | Description |
+|---|---|---|---|---|
 | [x] | `zero` | `(zero 4)` | `[0 0 0 0]` | Rank-1 zero tensor of length n |
 | [x] | `shape` | `(shape [[1 2][3 4]])` | `[2 2]` | Dimension sizes as a vector |
 | [x] | `rank` | `(rank [[1 2][3 4]])` | `2` | Number of dimensions |
