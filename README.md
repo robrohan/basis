@@ -7,8 +7,7 @@ A Lisp interpreter where tensors (scalars, vectors, matrices, N-dimensional arra
 ```
 (op arg1 arg2)          ; standard Lisp call
 [1 2 3]                 ; vector literal
-[[1 2] [3 4]]           ; matrix literal (2x3, etc.)
-(op, [arg1, arg2])      ; commas are whitespace — same as above
+[[1 2] [3 4]]           ; matrix literal (2x2, etc.)
 ```
 
 ## Build

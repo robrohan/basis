@@ -797,11 +797,10 @@ void look(void)
     see = c;
 }
 
-/* return nonzero if we are looking at character c, ' ' means any white space.
-   commas are treated as whitespace so [1, 2, 3] == [1 2 3] */
+/* return nonzero if we are looking at character c, ' ' means any white space */
 I seeing(int c)
 {
-    return c == ' ' ? (see > 0 && see <= c) || see == ',' : see == c;
+    return c == ' ' ? (see > 0 && see <= c) : see == c;
 }
 
 /* return the look ahead character from standard input, advance to the next */
