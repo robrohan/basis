@@ -8,9 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_PRIMS    128
-#define MAX_TENSORS  256  /* max live tensors */
-#define MAX_RANK     8    /* max tensor dimensions */
+#define MAX_PRIMS    0x80
+#define MAX_TENSORS  0x2000 /* max live tensors */
+#define MAX_RANK     0x08   /* max tensor dimensions */
 
 /* we only need two types to implement a Lisp interpreter:
         I    32-bit unsigned integer for tags, ordinals, heap/stack indices
@@ -38,8 +38,8 @@ typedef double   L;
 /* address of the atom heap is at the bottom of the cell stack */
 #define A (char *)cell
 
-/* number of cells for the shared stack and atom heap, increase N as desired */
-#define N 1024
+/* number of cells for the shared stack and atom heap */
+#define N 0x16000
 
 // These exist somewhere :)
 /* tensor: rank-N array of floats, backed by r2_maths vecn_* operations */
@@ -138,5 +138,6 @@ L f_dist2(L t, L e);
 L f_veq(L t, L e);
 L f_gc(L t, L e);
 L f_make_tensor(L t, L e);
+L f_exp(L t, L e);
 
 #endif /* TINYLISP_H */
