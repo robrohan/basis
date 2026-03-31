@@ -28,21 +28,22 @@ In standard Lisp, everything is a list. In Basis, everything is a tensor. A scal
 ## Build
 
 ```sh
-make fetch      # download vendor headers
-make build      # build the interpreter
-make test       # run unit tests
+make fetch         # download 3rd party libraries (all from the same author)
+make build         # build the interpreter (for testing)
+make release_cli   # build the release runtime
+make test          # run unit tests
 ```
 
 Run a file:
 
 ```sh
-./build/Darwin/arm64/basis.debug -f myfile.lisp
+./build/Darwin/arm64/basis -f myfile.lisp
 ```
 
 Start the REPL:
 
 ```sh
-./build/Darwin/arm64/basis.debug
+./build/Darwin/arm64/basis
 ```
 
 ## Examples
