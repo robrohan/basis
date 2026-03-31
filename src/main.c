@@ -58,9 +58,10 @@ int main(int argc, char *argv[])
             result = eval(parse(), env);
             // gc on file read kills pointers that are still needed
             // for now the user must call (gc) if they want it
-            // gc();
+            print(result);
+            putchar('\n');
+	    // gc();
         }
-        print(result);
         putchar('\n');
         fflush(stdout);
 	fclose(fp);

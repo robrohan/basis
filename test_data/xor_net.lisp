@@ -1,11 +1,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define W1 [
-  [0.5 0.5]
-  [0.5 0.5]
+  [1 1]
+  [1 1]
   ])
-(define b1 [0.1 0.1])
-(define W2 [0.5 0.5])
+(define b1 [-0.5 -1.5])
+(define W2 [1 -2])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -45,23 +45,22 @@
 		      (_ (define W2 (- W2 (* lr dW2))))
 		      (_ (define b1 (- b1 (* lr dz1))))
 		      (define W1 (- W1 (* lr (outer2 dz1 x))))
-		      (gc)
 		      )
 		    ))
 
 (define train-epoch (lambda (i)
 		      (if (< i 4)
-			  (let* (_ (train-one (slice training_input i)
-				     (slice expected_output i)))
+			  (let*
+			    (_ (train-one (slice training_input i) (slice expected_output i)))
 			    (train-epoch (+ i 1))
-			    (gc)
 			    )
 			  ()
 			  )
 		      ))
 
 (define forward (lambda (input)
-		  (let* (h1 (relu (+ (@ W1 input) b1)))
+		  (let*
+		    (h1 (relu (+ (@ W1 input) b1)))
 		    (sigmoid (dot W2 h1)))
 		  ))
 
@@ -72,14 +71,18 @@
 
 (define train (lambda (n)
 		(if (< 0 n)
-		    (let* (_ (train-epoch 0))
-		      (train (- n 1)))
+		    (let*
+		      (_ (train-epoch 0))
+		      (train (- n 1))
+		      )
 		    ())
 		))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(train 380)
+W1
+(train 80)
+W1
 
 (make-tensor (predict [0 0])
              (predict [0 1])
