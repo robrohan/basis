@@ -1,124 +1,85 @@
 # 𝔹asis
 
-A Lisp interpreter where tensors (scalars, vectors, matrices, N-dimensional arrays) are the fundamental data type. Code and data share the same tensor structure, trying to preserve Lisp's homoiconicity.
+A Lisp interpreter where tensors are the fundamental data type. Vectors, matrices, and N-dimensional arrays are first-class values — not library types bolted on afterward. Code and data share the same tensor structure, preserving Lisp's homoiconicity.
 
-## Syntax
+## The idea
 
-```
-(op arg1 arg2)          ; standard Lisp call
-[1 2 3]                 ; vector literal
-[[1 2] [3 4]]           ; matrix literal (2x3, etc.)
-(op, [arg1, arg2])      ; commas are whitespace — same as above
+In standard Lisp, everything is a list. In Basis, everything is a tensor. A scalar is a rank-0 tensor, a vector rank-1, a matrix rank-2, and so on. The `[...]` literal syntax constructs tensors directly, and sub-expressions inside a tensor are evaluated at runtime, so you can write things like:
+
+```lisp
+(define x 3)
+
+; tensor elements can be any expression
+[(+ 3 x) x]
+; => [6 3]
+
+; build a matrix with computed values
+[[(* x x) 0]
+ [0       (* x x)]]
+; => [[9 0] [0 9]]
+
+; tensors are code too — store unevaluated, eval later
+(define template '[(+ x 1) x])
+(define x 10)
+(eval template)
+; => [11 10]
 ```
 
 ## Build
 
 ```sh
-make fetch      # download vendor headers
-make build      # build the REPL
-make test       # build and run unit tests
-make run        # start the REPL
+make fetch         # download 3rd party libraries (all from the same author)
+make build         # build the interpreter (for testing)
+make release_cli   # build the release runtime
+make test          # run unit tests
 ```
 
-## Primitives
+Run a file:
 
-### Core Lisp
+```sh
+./build/Darwin/arm64/basis -f myfile.lisp
+```
 
-| Primitive | Example | Description |
-|---|---|---|
-| `quote` | `(quote foo)` | Return expression unevaluated |
-| `eval` | `(eval x)` | Evaluate expression |
-| `cons` | `(cons 1 2)` | Construct a pair |
-| `car` | `(car p)` | First element of pair |
-| `cdr` | `(cdr p)` | Second element of pair |
-| `eq?` | `(eq? x y)` | Structural equality |
-| `pair?` | `(pair? x)` | True if x is a cons pair |
-| `if` | `(if c t f)` | Conditional |
-| `cond` | `(cond (c1 e1) (c2 e2))` | Multi-branch conditional |
-| `and` | `(and x y)` | Logical and |
-| `or` | `(or x y)` | Logical or |
-| `not` | `(not x)` | Logical not |
-| `lambda` | `(lambda (x) (* x x))` | Anonymous function |
-| `define` | `(define sq (lambda (x) (* x x)))` | Bind name in environment |
-| `let*` | `(let* (x 1) (y 2) (+ x y))` | Sequential local bindings |
-| `int` | `(int 3.9)` | Truncate to integer |
-| `<` | `(< 1 2)` | Less than |
+Start the REPL:
 
-### Arithmetic (scalars and tensors)
-
-All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast).
-
-| Primitive | Example | Description |
-|---|---|---|
-| `+` | `(+ [1 2] [3 4])` | Add |
-| `-` | `(- [5 6] [1 2])` | Subtract |
-| `*` | `(* [1 2] 3)` | Multiply / scalar broadcast |
-| `/` | `(/ [6 8] 2)` | Divide / scalar broadcast |
-
-### Tensor constructors and inspection
-
-| Primitive | Example | Result | Description |
-|---|---|---|---|
-| `zero` | `(zero 4)` | `[0 0 0 0]` | Rank-1 zero tensor of length n |
-| `shape` | `(shape [[1 2][3 4]])` | `[2 2]` | Dimension sizes as a vector |
-| `rank` | `(rank [[1 2][3 4]])` | `2` | Number of dimensions |
-| `slice` | `(slice [10 20 30] 1)` | `20` | Element or row at index i |
-| `head` | `(head [10 20 30])` | `10` | First element or row |
-| `tail` | `(tail [10 20 30])` | `[20 30]` | All elements after the first |
-| `tensor?` | `(tensor? [1 2])` | `#t` | True if x is a tensor |
-
-### Matrix operations
-
-| Primitive | Alias | Example | Description |
-|---|---|---|---|
-| `matmul` | `@` | `(@ [[1 2][3 4]] [[5 6][7 8]])` | Matrix multiply (mat×mat, mat×vec, vec×mat) |
-| `transpose` | `T` | `(T [[1 2 3][4 5 6]])` | Swap rows and columns |
-
-### Vector math
-
-| Primitive | Example | Result | Description |
-|---|---|---|---|
-| `dot` | `(dot [1 2 3] [4 5 6])` | `32` | Dot product → scalar |
-| `length` | `(length [3 4])` | `5` | Euclidean length → scalar |
-| `length2` | `(length2 [3 4])` | `25` | Length squared → scalar |
-| `dist` | `(dist [0 0] [3 4])` | `5` | Distance between two points → scalar |
-| `dist2` | `(dist2 [0 0] [3 4])` | `25` | Distance squared → scalar |
-| `normalize` | `(normalize [3 4])` | `[0.6 0.8]` | Scale to unit length |
-| `abs` | `(abs [-3 1 -2])` | `[3 1 2]` | Element-wise absolute value |
-| `sqrt` | `(sqrt [4 9 16])` | `[2 3 4]` | Element-wise square root |
-| `pow` | `(pow [2 3 4] 2)` | `[4 9 16]` | Element-wise power |
-| `vec=` | `(vec= [1 2] [1 2])` | `#t` | Element-wise equality |
+```sh
+./build/Darwin/arm64/basis
+```
 
 ## Examples
 
 ```lisp
-
-(define 🥧 3.14)
-(* 🥧 3)
-; => 9.42
-
-; dot product of two vectors
+; dot product
 (dot [1 2 3] [4 5 6])
 ; => 32
-
-; normalize a vector
-(normalize [3 4])
-; => [0.6 0.8]
 
 ; matrix multiply
 (@ [[1 2] [3 4]] [[5 6] [7 8]])
 ; => [[19 22] [43 50]]
 
-; transpose
-(T [[1 2 3] [4 5 6]])
-; => [[1 4] [2 5] [3 6]]
-
-; chain: A * A^T
-(@ [[1 2] [3 4]] (T [[1 2] [3 4]]))
+; chain: A * Aᵀ
+(define A [[1 2] [3 4]])
+(@ A (T A))
 ; => [[5 11] [11 25]]
 
-; lambda over tensors
+; scale a vector with a lambda
 (define scale (lambda (v s) (* v s)))
 (scale [1 2 3] 10)
 ; => [10 20 30]
+
+; build a rotation-like matrix from a variable
+(define t 1.5)
+[[(+ t 0) 0]
+ [0       t]]
+; => [[1.5 0] [0 1.5]]
+
+; unicode atoms work fine
+(define 🥧 3.14159)
+(* 🥧 2)
+; => 6.28318
 ```
+
+## Documentation
+
+- [Language design](docs/design.md) — syntax, BNF, evaluation model
+- [Primitives reference](docs/primitives.md) — full list of built-in functions
