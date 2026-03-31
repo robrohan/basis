@@ -941,8 +941,14 @@ int get(void)
 char scan(void)
 {
     I i = 0;
-    while (seeing(' '))
-        look();
+    while (seeing(' ') || seeing(';'))
+    {
+        if (seeing(';'))
+            while (see >= 0 && !seeing('\n')) /* skip to end of line */
+                look();
+        else
+            look();
+    }
     if (see < 0)
     {
         buf[0] = 0;

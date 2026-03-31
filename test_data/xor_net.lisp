@@ -59,10 +59,18 @@
 		      ))
 
 (define forward (lambda (input)
-		  (let*
-		    (h1 (relu (+ (@ W1 input) b1)))
-		    (sigmoid (dot W2 h1)))
-		  ))
+          (let*
+            ; z1 = W1 @ input + b1
+            ;   matrix-multiply weights W1 by the input vector, then add bias b1
+            ;   result is a 2-element vector: one pre-activation value per hidden neuron
+            (h1 (relu (+ (@ W1 input) b1)))
+            ; h1 = relu(z1)
+            ;   apply ReLU activation: clamps negative values to zero
+            ;   each hidden neuron either "fires" (positive) or stays silent (zero)
+            ; return sigmoid(dot(W2, h1))
+            ;   dot(W2, h1): weighted sum of hidden activations → single scalar
+            ;   sigmoid(...): squash to (0,1) range — the network's output probability
+            (sigmoid (dot W2 h1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
