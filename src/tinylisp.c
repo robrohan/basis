@@ -652,6 +652,20 @@ L f_vsqrt(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
+/* (exp x) — e^x; works on scalars and element-wise on tensors */
+L f_exp(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS)
+        return (L)exp((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++)
+        out->data[i] = expf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
 /* (normalize v) — scale to unit length; vec2/vec4 fast paths */
 L f_normalize(L t, L e){TENS_UNARY_DISP(vec2_normalize, vec4_normalize, vecn_normalize)}
 
@@ -850,6 +864,7 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"T", f_transpose},
                                 {"abs", f_vabs},
                                 {"sqrt", f_vsqrt},
+                                {"exp", f_exp},
                                 {"normalize", f_normalize},
                                 {"pow", f_vpow},
                                 {"zero", f_zero},
@@ -862,7 +877,7 @@ struct prims prim[MAX_PRIMS] = {{"eval", f_eval},
                                 {"gc", f_gc},
                                 {"make-tensor", f_make_tensor},
                                 {0}};
-int prim_count = 45;
+int prim_count = 46;
 
 void register_prim(const char *s, L (*f)(L, L))
 {

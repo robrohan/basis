@@ -6,15 +6,13 @@ kanban-plugin: board
 
 ## 🧊 Backlog
 
-- [ ] (slice [[10 20 40]] 1) returns [0 0 0] is that right?
 - [ ] car and cdr don't seem to work with tensors
 - [ ] eq? does not work with tensors (element wise?)
-- [ ] cons does not work with tensors (seems to create a pair, but it's empty)
-- [ ] Format output of a matrix in a way that is easier to read
-- [ ] How to make a service
+- [ ] Format output of a matrix in a way that is easier to read, but still conforms to homoiconicity
 - [ ] add maths functions sinf, cosf, etc
 - [ ] add `include`, `require` or `import` to parse other files and use functions etc in those files
 - [ ] (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error
+- [ ] How to make a service
 
 ## 📝 Todo
 
