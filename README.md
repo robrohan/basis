@@ -83,3 +83,7 @@ Start the REPL:
 
 - [Language design](docs/design.md) — syntax, BNF, evaluation model
 - [Primitives reference](docs/primitives.md) — full list of built-in functions
+
+## Examples
+
+- [XOR neural network](test_data/xor_net.lisp) — 2-layer network with ReLU hidden layer, sigmoid output, and backpropagation; demonstrates tensor arithmetic, matmul, and in-place weight updates
