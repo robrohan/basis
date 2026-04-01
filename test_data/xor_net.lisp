@@ -1,4 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Simple NN to solve the XOR problem
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (define W1 [
   [1 1]
@@ -33,17 +35,47 @@
 
 (define train-one (lambda (x y)
 		    (let*
+					; z1 = W1 @ x + b1
+					;   matrix-multiply weights by input, add bias — pre-activation
+					;   for hidden layer
 		      (z1  (+ (@ W1 x) b1))
+					; h1 = relu(z1)
+					;   apply ReLU: clamp negatives to zero — hidden layer activations
 		      (h1  (relu z1))
+					; s = dot(W2, h1)
+					;   weighted sum of hidden activations → single scalar
+					;   (pre-activation for output)
 		      (s   (dot W2 h1))
+					; yh = sigmoid(s)
+					;   squash scalar to (0,1) range — the network's predicted probability
 		      (yh  (sigmoid s))
+					; er = 2 * (yh - y)
+					;   derivative of MSE loss (d/dyh of (yh-y)^2) — signed error at output
 		      (er  (* 2 (- yh y)))
+					; dout = er * sigmoid'(yh)
+					;   chain rule: scale error by sigmoid's local slope at yh
 		      (dout (* er (sigmoid-d yh)))
+					; dW2 = dout * h1
+					;   gradient for output weights: outer product (scalar * vector)
+					;   = weight update direction
 		      (dW2 (* dout h1))
+					; dh1 = dout * W2
+					;   backprop through output layer: distribute gradient to hidden
+					;   activations
 		      (dh1 (* dout W2))
+					; dz1 = dh1 * step(z1)
+					;   backprop through ReLU: step(z1) is 1 where neuron fired, 0 where it
+					;   was clamped
 		      (dz1 (* dh1 (step z1)))
+					; W2 -= lr * dW2
+					;   gradient descent step for output weights
 		      (_ (define W2 (- W2 (* lr dW2))))
+					; b1 -= lr * dz1
+					;   gradient descent step for hidden biases
 		      (_ (define b1 (- b1 (* lr dz1))))
+					; W1 -= lr * outer(dz1, x)
+					;   gradient descent step for input weights: outer2 builds the 2x2
+					;   gradient matrix
 		      (define W1 (- W1 (* lr (outer2 dz1 x))))
 		      )
 		    ))
@@ -59,18 +91,20 @@
 		      ))
 
 (define forward (lambda (input)
-          (let*
-            ; z1 = W1 @ input + b1
-            ;   matrix-multiply weights W1 by the input vector, then add bias b1
-            ;   result is a 2-element vector: one pre-activation value per hidden neuron
-            (h1 (relu (+ (@ W1 input) b1)))
-            ; h1 = relu(z1)
-            ;   apply ReLU activation: clamps negative values to zero
-            ;   each hidden neuron either "fires" (positive) or stays silent (zero)
-            ; return sigmoid(dot(W2, h1))
-            ;   dot(W2, h1): weighted sum of hidden activations → single scalar
-            ;   sigmoid(...): squash to (0,1) range — the network's output probability
-            (sigmoid (dot W2 h1)))))
+		  (let*
+					; z1 = W1 @ input + b1
+					;   matrix-multiply weights W1 by the input vector, then add bias b1
+					;   result is a 2-element vector: one pre-activation value per
+					;   hidden neuron
+		      (h1 (relu (+ (@ W1 input) b1)))
+					; h1 = relu(z1)
+					;   apply ReLU activation: clamps negative values to zero
+					;   each hidden neuron either "fires" (positive) or stays silent (zero)
+					; return sigmoid(dot(W2, h1))
+					;   dot(W2, h1): weighted sum of hidden activations → single scalar
+					;   sigmoid(...): squash to (0,1) range — the network's output
+					;   probability
+		    (sigmoid (dot W2 h1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
