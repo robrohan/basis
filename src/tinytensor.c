@@ -124,39 +124,47 @@ L tens_binop(L a, L b, char op)
     return err;
 }
 
+/* if x is a stored s-expression (CONS), evaluate it fully before use.
+   this lets quoted expressions like q='(+ 1 2) be used directly in
+   arithmetic and tensor literals, including deeply nested cases. */
+static L resolve(L x, L e)
+{
+    return T(x) == CONS ? eval(x, e) : x;
+}
+
 static L f_add(L t, L e)
 {
     t = evlis(t, e);
-    L n = car(t);
+    L n = resolve(car(t), e);
     while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, car(t), '+');
+        n = tens_binop(n, resolve(car(t), e), '+');
     return num(n);
 }
 
 static L f_sub(L t, L e)
 {
     t = evlis(t, e);
-    L n = car(t);
+    L n = resolve(car(t), e);
     while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, car(t), '-');
+        n = tens_binop(n, resolve(car(t), e), '-');
     return num(n);
 }
 
 static L f_mul(L t, L e)
 {
     t = evlis(t, e);
-    L n = car(t);
+    L n = resolve(car(t), e);
     while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, car(t), '*');
+        n = tens_binop(n, resolve(car(t), e), '*');
     return num(n);
 }
 
 static L f_div(L t, L e)
 {
     t = evlis(t, e);
-    L n = car(t);
+    L n = resolve(car(t), e);
     while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, car(t), '/');
+        n = tens_binop(n, resolve(car(t), e), '/');
     return num(n);
 }
 
@@ -547,7 +555,7 @@ static L f_make_tensor(L t, L e)
         tmp = t;
         while (!is_nil(tmp))
         {
-            item = car(tmp);
+            item = resolve(car(tmp), e);
             data[k++] = (float)item;
             tmp = cdr(tmp);
         }
