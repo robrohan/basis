@@ -1312,6 +1312,35 @@ static const char *test_lambda_tensor_body(void)
 }
 
 /* -----------------------------------------------------------------------
+   print primitive
+   --------------------------------------------------------------------- */
+
+static const char *test_print_returns_value(void)
+{
+    setup();
+    /* (print 42) should return 42 */
+    L expr = cons(atom("print"), cons((L)42.0, nil));
+    L r = eval(expr, env);
+    r2_assert("print: returns numeric value", r == (L)42.0);
+    return NULL;
+}
+
+static const char *test_print_returns_tensor(void)
+{
+    setup();
+    /* (define v [1 2 3]) (print v) should return the tensor */
+    L mk   = cons(atom("make-tensor"),
+                  cons((L)1.0, cons((L)2.0, cons((L)3.0, nil))));
+    L def  = cons(atom("define"), cons(atom("v"), cons(mk, nil)));
+    eval(def, env);
+    L expr = cons(atom("print"), cons(atom("v"), nil));
+    L r = eval(expr, env);
+    r2_assert("print tensor: is TENS",    T(r) == TENS);
+    r2_assert("print tensor: data[0]==1", tensor_heap[ord(r)].data[0] == 1.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    Test runner
    --------------------------------------------------------------------- */
 
@@ -1392,6 +1421,8 @@ static const char *all_tests(void)
     r2_run_test(test_eval_quoted_tensor);
     r2_run_test(test_define_code_eval_later);
     r2_run_test(test_lambda_tensor_body);
+    r2_run_test(test_print_returns_value);
+    r2_run_test(test_print_returns_tensor);
     return NULL;
 }
 

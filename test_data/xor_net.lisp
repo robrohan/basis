@@ -88,11 +88,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-W1
 (train 80)
-W1
+; (print W1)
+; (print W2)
 
-(make-tensor (predict [0 0])
+(print (make-tensor (predict [0 0])
              (predict [0 1])
              (predict [1 0])
-             (predict [1 1]))
+             (predict [1 1])))

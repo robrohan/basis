@@ -6,18 +6,17 @@ kanban-plugin: board
 
 ## 🧊 Backlog
 
-- [ ] Refactor main.c: extract repl() and run_file() as separate functions — the two modes are diverging enough to warrant it
-- [ ] Fix GC in file mode: gc() is safe to call after print(result) — the old "clobbering" was caused by calling gc() before printing a TENS result held only in a C local variable (not in the cell array). Calling it post-print avoids this.
-- [ ] Add (set! x val) primitive for explicit mutation following Scheme convention: updates the first matching binding in env in-place, returns val, errors if x is not already defined. Make (define x val) error if x is already bound — forces the programmer to be explicit about intent. Update xor_net.lisp weight updates to use (set! W1 ...) etc. This fixes unbounded env growth from training loops (1000 epochs × 4 examples × 3 params = 12k stale shadow bindings under current define-always-prepends behaviour).
 - [ ] Add string literal support ("..." syntax) with scanner changes and a STRING NaN-box tag or atom-backed storage; use r2_strings.h s8/rune types for the implementation so that string length, slice, and print are character-aware (rune counts) not byte-counts
+- [ ] Add (princ x) primitive following Common Lisp conventions: human-readable output without escapes (depends on string literals)
+- [ ] add `include`, `require` or `import` to parse other files and use functions etc in those files
+- [ ] Add (set! x val) primitive for explicit mutation following Scheme convention: updates the first matching binding in env in-place, returns val, errors if x is not already defined. Make (define x val) error if x is already bound — forces the programmer to be explicit about intent. Update xor_net.lisp weight updates to use (set! W1 ...) etc. This fixes unbounded env growth from training loops (1000 epochs × 4 examples × 3 params = 12k stale shadow bindings under current define-always-prepends behaviour).
+
+- [ ] Fix GC in file mode: gc() is safe to call after print(result) — the old "clobbering" was caused by calling gc() before printing a TENS result held only in a C local variable (not in the cell array). Calling it post-print avoids this.
 - [ ] Add (defun name (args) "docstring" body) following Emacs Lisp convention: sugar for (define name (lambda (args) body)) with the docstring stored on the binding so (doc name) can retrieve it; depends on string literals being implemented first
-- [ ] Add (print x) and (princ x) primitives following Common Lisp conventions: print returns x, so it is usable inline; princ for human-readable output without escapes
-- [ ] Silence file mode: stop echoing every expression result (match Common Lisp load behaviour); explicit (print x) calls are the only output — depends on print primitive being available first
 - [ ] car and cdr don't seem to work with tensors
 - [ ] eq? does not work with tensors (element wise?)
 - [ ] Format output of a matrix in a way that is easier to read, but still conforms to homoiconicity
 - [ ] add maths functions sinf, cosf, etc
-- [ ] add `include`, `require` or `import` to parse other files and use functions etc in those files
 - [ ] (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error
 - [ ] Example of making a long running service
 - [ ] More compelling REPL using r2_termui.h
@@ -29,6 +28,9 @@ kanban-plugin: board
 ## ✅ Done
 
 **Complete**
+- [x] Add (print x) primitive: prints x then newline, returns x (CL convention, usable inline)
+- [x] Silence file mode: stop echoing every expression result (match Common Lisp load behaviour); explicit (print x) calls are the only output — depends on print primitive being available first
+- [x] Refactor main.c: extract repl() and run_file() as separate functions — the two modes are diverging enough to warrant it
 - [x] Write design document (docs/design.md) covering syntax, BNF, primitives, and r2_maths.h mapping
 - [x] Replace #define I unsigned with typedef uint32_t I using <stdint.h>
 - [x] Replace #define L double with typedef double L with NaN-boxing explanation comment

@@ -87,6 +87,15 @@ void gc(void)
     gc_tensors();
 }
 
+/* (print x) — display x, then newline; returns x (CL convention, usable inline) */
+static L f_print(L t, L e)
+{
+    L x = eval(car(t), e);
+    print(x);
+    putchar('\n');
+    return x;
+}
+
 /* (gc) — force a garbage collection cycle, returns () */
 static L f_gc(L t, L e)
 {
@@ -98,5 +107,6 @@ static L f_gc(L t, L e)
 
 void register_runtime_prims(void)
 {
+    register_prim("print", f_print);
     register_prim("gc", f_gc);
 }
