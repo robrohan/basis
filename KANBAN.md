@@ -20,6 +20,7 @@ kanban-plugin: board
 - [ ] (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error
 - [ ] Example of making a long running service
 - [ ] More compelling REPL using r2_termui.h
+- [ ] Add (match pattern expr) and (unify p1 p2) primitives for symbolic inference: match binds variables in a pattern against an s-expression, unify finds substitutions that make two terms equal — enables transitive KB queries like (car is-a vehicle is-a ...) over association list knowledge bases
 
 ## 📝 Todo
 
