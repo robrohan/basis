@@ -4,4 +4,5 @@
 void printlist(L t);
 void print(L x);
 void gc(void);
+void register_runtime_prims(void);
 #endif

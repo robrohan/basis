@@ -558,16 +558,6 @@ static L f_make_tensor(L t, L e)
     }
 }
 
-/* (gc) — force a garbage collection cycle, returns () */
-static L f_gc(L t, L e)
-{
-    (void)t;
-    (void)e;
-    gc_core();
-    gc_tensors();
-    return nil;
-}
-
 /* gc_tensors: tensor mark/compact/patch phases */
 void gc_tensors(void)
 {
@@ -637,6 +627,5 @@ void register_tensor_prims(void)
     register_prim("dist",        f_dist);
     register_prim("dist2",       f_dist2);
     register_prim("vec=",        f_veq);
-    register_prim("gc",          f_gc);
     register_prim("make-tensor", f_make_tensor);
 }

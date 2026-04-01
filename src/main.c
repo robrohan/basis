@@ -11,7 +11,8 @@ static void init(void)
     err = atom("ERR");
     tru = atom("#t");
     env = pair(tru, tru, nil);
-    register_tensor_prims();   /* add tensor prims to prim[] BEFORE building env */
+    register_tensor_prims();
+    register_runtime_prims();
     for (i = 0; prim[i].s; ++i)
         env = pair(atom(prim[i].s), box(PRIM, i), env);
 }

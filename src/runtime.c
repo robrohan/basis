@@ -86,3 +86,17 @@ void gc(void)
     gc_core();
     gc_tensors();
 }
+
+/* (gc) — force a garbage collection cycle, returns () */
+static L f_gc(L t, L e)
+{
+    (void)t;
+    (void)e;
+    gc();
+    return nil;
+}
+
+void register_runtime_prims(void)
+{
+    register_prim("gc", f_gc);
+}
