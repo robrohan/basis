@@ -62,7 +62,7 @@ test:
 release_cli:
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
-	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O2 -std=$(STD) \
+	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
 		./src/tinylisp.c ./src/tinytensor.c ./src/runtime.c ./src/main.c \
 		-I./vendor \

@@ -21,6 +21,7 @@ kanban-plugin: board
 - [ ] Example of making a long running service
 - [ ] More compelling REPL using r2_termui.h
 - [ ] Add (match pattern expr) and (unify p1 p2) primitives for symbolic inference: match binds variables in a pattern against an s-expression, unify finds substitutions that make two terms equal — enables transitive KB queries like (car is-a vehicle is-a ...) over association list knowledge bases
+- [ ] Batched training: parallelize train-epoch across CPU cores — each example is independent, spawn N threads each running train-one on a subset, accumulate gradients, single weight update step; revisit if project moves beyond research POC
 
 ## 📝 Todo
 
