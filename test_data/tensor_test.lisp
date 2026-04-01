@@ -2,85 +2,91 @@
 ; Run with: echo '...' | ./build/Darwin/arm64/basis.debug
 ; or load interactively at the REPL
 
-; ---- tensor literals ----
-; scalar (rank 0)
-; (rank [42])        => 1   (a 1-element vector, not truly rank-0 yet)
+					; ---- tensor literals ----
+					; scalar (rank 0)
+(print (rank [42]))
+					; => 1   (a 1-element vector, rank-1)
 
-; vector literal
-[1 2 3]
-; => [1 2 3]
+(print (rank 42))
+					; => ERR (should be rank 0)
 
-; ---- rank ----
-(rank [1 2 3])
-; => 1
+					; vector literal
+(print [1 2 3])
+					; => [1 2 3]
 
-(rank [10 20 30 40])
-; => 1
+					; ---- rank ----
+(print (rank [1 2 3]))
+					; => 1
 
-; ---- shape ----
-(shape [1 2 3])
-; => [3]
+(print (rank [10 20 30 40]))
+					; => 1
 
-(shape [10 20 30 40])
-; => [4]
+					; ---- shape ----
+(print (shape [1 2 3]))
+					; => [3]
 
-; ---- tensor? predicate ----
-(tensor? [1 2 3])
-; => #t
+(print (shape [10 20 30 40]))
+					; => [4]
+(print (shape 0))
+					; => ERR
 
-(tensor? 42)
-; => ()
+					; ---- tensor? predicate ----
+(print (tensor? [1 2 3]))
+					; => #t
 
-(tensor? (quote hello))
-; => ()
+(print (tensor? 42))
+					; => ()
 
-; ---- slice ----
-(slice [10 20 30] 0)
-; => 10
+(print (tensor? (quote hello)))
+					; => ()
 
-(slice [10 20 30] 1)
-; => 20
+					; ---- slice ----
+(print (slice [10 20 30] 0))
+					; => 10
 
-(slice [10 20 30] 2)
-; => 30
+(print (slice [10 20 30] 1))
+					; => 20
 
-; ---- element-wise arithmetic ----
-(+ [1 2 3] [4 5 6])
-; => [5 7 9]
+(print (slice [10 20 30] 2))
+					; => 30
 
-(- [10 20 30] [1 2 3])
-; => [9 18 27]
+					; ---- element-wise arithmetic ----
+(print (+ [1 2 3] [4 5 6]))
+					; => [5 7 9]
 
-(* [2 3 4] [1 2 3])
-; => [2 6 12]
+(print (- [10 20 30] [1 2 3]))
+					; => [9 18 27]
 
-(/ [10 20 30] [2 4 5])
-; => [5 5 6]
+(print (* [2 3 4] [1 2 3]))
+					; => [2 6 12]
 
-; ---- scalar broadcast ----
-(+ [1 2 3] 10)
-; => [11 12 13]
+(print (/ [10 20 30] [2 4 5]))
+					; => [5 5 6]
 
-(* [1 2 3] 2)
-; => [2 4 6]
+					; ---- scalar broadcast ----
+(print(+ [1 2 3] 10))
+					; => [11 12 13]
 
-(- [10 20 30] 5)
-; => [5 15 25]
+(print (* [1 2 3] 2))
+					; => [2 4 6]
 
-(/ [10 20 30] 10)
-; => [1 2 3]
+(print (- [10 20 30] 5))
+					; => [5 15 25]
 
-; ---- tensor in define / lambda ----
+(print (/ [10 20 30] 10))
+					; => [1 2 3]
+
+					; ---- tensor in define / lambda ----
 (define v [3 1 4 1 5])
-(shape v)
-; => [5]
+(print (shape v))
+					; => [5]
 
-(slice v 2)
-; => 4
+(print (slice v 2))
+					; => 4
 
-(+ v [1 1 1 1 1])
-; => [4 2 5 2 6]
+(print (+ v [1 1 1 1 1]))
+					; => [4 2 5 2 6]
 
-; ---- nested expressions ----
-; => [7 10 13]
-(+ [1 2 3] (* [2 2 2] [3 4 5]))
+					; ---- nested expressions ----
+(print (+ [1 2 3] (* [2 2 2] [3 4 5])))
+					; => [7 10 13]

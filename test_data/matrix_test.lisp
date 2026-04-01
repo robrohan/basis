@@ -1,67 +1,80 @@
-; matrix_test.lisp — examples of matrix literals and operations
-; Run any expression with:
-;   printf '<expr>\n' | ./build/Darwin/arm64/basis.debug
+;; matrix_test.lisp — examples of matrix literals and operations
+;; Run any expression with:
+;;   printf '<expr>\n' | ./build/Darwin/arm64/basis.debug
 
-; ---- matrix literals ----
-[[1 2 3] [4 5 6]]
-; => [[1 2 3] [4 5 6]]
+					; ---- matrix literals ----
+(print [[1 2 3] [4 5 6]])
+					; => [[1 2 3] [4 5 6]]
 
-; ---- shape and rank ----
-(shape [[1 2 3] [4 5 6]])
-; => [2 3]
+					; ---- shape and rank ----
+(print (shape [[1 2 3] [4 5 6]]))
+					; => [2 3]
 
-(rank [[1 2 3] [4 5 6]])
-; => 2
+(print (rank [[1 2 3] [4 5 6]]))
+					; => 2
 
-; ---- slice a row ----
-(slice [[10 20 30] [40 50 60]] 0)
-; => [10 20 30]
+					; ---- slice a row ----
+(print (slice [[10 20 30] [40 50 60]] 0))
+					; => [10 20 30]
 
-(slice [[10 20 30] [40 50 60]] 1)
-; => [40 50 60]
+(print (slice [[10 20 30] [40 50 60]] 1))
+					; => [40 50 60]
 
-; ---- element-wise arithmetic on matrices ----
-(+ [[1 2] [3 4]] [[10 20] [30 40]])
-; => [[11 22] [33 44]]
+					; ---- element-wise arithmetic on matrices ----
+(print (+ [[1 2] [3 4]] [[10 20] [30 40]]))
+					; => [[11 22] [33 44]]
 
-(* [[1 2] [3 4]] [[2 2] [2 2]])
-; => [[2 4] [6 8]]
+(print (* [[1 2] [3 4]] [[2 2] [2 2]]))
+					; => [[2 4] [6 8]]
 
-(- [[10 20] [30 40]] [[1 2] [3 4]])
-; => [[9 18] [27 36]]
+(print (- [[10 20] [30 40]] [[1 2] [3 4]]))
+					; => [[9 18] [27 36]]
 
-; ---- scalar broadcast on matrices ----
-(* [[1 2] [3 4]] 10)
-; => [[10 20] [30 40]]
+					; ---- scalar broadcast on matrices ----
+(print (* [[1 2] [3 4]] 10))
+					; => [[10 20] [30 40]]
 
-(+ [[1 2] [3 4]] 1)
-; => [[2 3] [4 5]]
+(print (+ [[1 2] [3 4]] 1))
+					; => [[2 3] [4 5]]
 
-; ---- matmul: square matrices ----
-(@ [[1 2] [3 4]] [[5 6] [7 8]])
-; => [[19 22] [43 50]]
+					; ---- matmul: square matrices ----
+(print (@ [ [1 2]
+	    [3 4] ]
 
-; ---- matmul: rectangular ----
-(@ [[1 2 3] [4 5 6]] [[7 8] [9 10] [11 12]])
-; => [[58 64] [139 154]]
+	  [ [5 6]
+	    [7 8] ] ))
+					; => [[19 22] [43 50]]
 
-; ---- matmul: matrix * vector ----
-(@ [[1 0] [0 1]] [3 7])
-; => [3 7]   (identity matrix leaves vector unchanged)
+					; ---- matmul: rectangular ----
+(print (@ [ [1 2 3]
+	    [4 5 6] ]
+	    
+	  [ [7 8]
+	    [9 10]
+	    [11 12] ]))
+					; => [[58 64] [139 154]]
 
-(@ [[2 0] [0 3]] [4 5])
-; => [8 15]
+					; ---- matmul: matrix * vector ----
+(print (@ [[1 0] [0 1]] [3 7]))
+					; => [3 7]   (identity matrix leaves vector unchanged)
 
-; ---- matmul spelled out ----
-(matmul [[1 2] [3 4]] [[1 0] [0 1]])
-; => [[1 2] [3 4]]   (multiply by identity)
+(print (@ [[2 0] [0 3]] [4 5]))
+					; => [8 15]
 
-; ---- chained matmul ----
-(@ (@ [[1 2] [3 4]] [[5 6] [7 8]]) [[1 0] [0 1]])
-; => [[19 22] [43 50]]   (A*B*I == A*B)
+					; ---- matmul spelled out ----
+(print (matmul [[1 2] [3 4]] [[1 0] [0 1]]))
+					; => [[1 2] [3 4]]   (multiply by identity)
 
-; ---- define a matrix and reuse it ----
+					; ---- chained matmul ----
+(print (@ (@ [[1 2] [3 4]] [[5 6] [7 8]]) [[1 0] [0 1]]))
+					; => [[19 22] [43 50]]   (A*B*I == A*B)
+
+					; ---- define a matrix and reuse it ----
 (define A [[1 2] [3 4]])
 (define B [[5 0] [0 5]])
-(@ A B)
-; => [[5 10] [15 20]]   (scalar-matrix multiply via matmul)
+(print (@ A B))
+					; => [[5 10] [15 20]]   (scalar-matrix multiply via matmul)
+
+					; ---- transpose ----
+(print (T A))
+					; => [[1 3] [2 4]]
