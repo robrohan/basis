@@ -13,7 +13,7 @@ Date: 2026-04-01
 
 Basis is a Lisp-like language where tensors (scalars, vectors, matrices, and higher-dimensional arrays) are the fundamental data structure, replacing the cons cell / linked list of traditional Lisp.
 
-Traditional Lisp is built on a single primitive: the cons pair. Everything — code and data alike — is a tree of cons cells. Basis keeps that uniformity (homoiconicity) but replaces the cons pair with a tensor, making multi-dimensional numeric data a first-class citizen rather than a library concern.
+Traditional Lisp is built on a single primitive: the cons pair. Everything, code and data alike, is a tree of cons cells. Basis keeps that uniformity (homoiconicity) but tries to replace the cons pair with a tensor, making multi-dimensional numeric data a first-class citizen rather than a library concern.
 
 The core assumption is that homoiconicity can be preserved with tensors as the base type. In standard Lisp, code is data because both are lists:
 
@@ -27,11 +27,11 @@ In Basis, code is data because both are tensors:
 '(+ [1 2])   ; a tensor that is also an expression
 ```
 
-The operator is the head element, the argument tensor follows. Structure and computation are still the same thing.
+The operator is the head element, the argument tensor follows. Structure and computation are still the same thing. Hopefully, this will lead to intresting call graphs where one can mix nerual network weights with the ablity to add runtime inspection and modifiation.
 
 #### 1.2 Constraints
 
-- All numeric values are stored as single-precision `float` in tensor data arrays. Scalars (rank-0 values) are represented as IEEE 754 `double` via NaN-boxing and converted to `float` when placed into a tensor.
+- All numeric values are stored as single-precision `float32` in tensor data arrays. Scalars (rank-0 values) are represented as IEEE 754 `double` via NaN-boxing and converted to `float32` when placed into a tensor.
 - NaN-boxing requires a 64-bit `double` — the tag bits occupy bits 48–63 of the NaN payload. `float` (32-bit) does not have enough NaN payload to hold both a tag and an ordinal, so the `L` type must remain `double`.
 - The tensor heap is a fixed-size pool (`MAX_TENSORS = 0x2000`). Exceeding this limit aborts. Long-running programs must rely on garbage collection to reclaim dead tensors.
 - The cons cell / atom heap is a shared fixed-size array (`N = 0x16000` cells). The atom heap grows upward from index 0; the cons stack grows downward from index N. If they meet, the interpreter aborts.
@@ -69,10 +69,10 @@ Evaluation follows the standard tinylisp model extended for tensors:
 
 ```
 eval(x, e):
-  if x is ATOM  → look up in environment e
-  if x is TENS  → return as-is (tensors are self-evaluating)
-  if x is CONS  → apply(eval(car(x), e), cdr(x), e)
-  otherwise     → return x (number, NIL, PRIM, CLOS)
+  if x is ATOM  -> look up in environment e
+  if x is TENS  -> return as-is (tensors are self-evaluating)
+  if x is CONS  -> apply(eval(car(x), e), cdr(x), e)
+  otherwise     -> return x (number, NIL, PRIM, CLOS)
 ```
 
 A tensor literal in code is self-evaluating, just like a number. An expression `(op [args])` is still a CONS at the top level, with a TENS value as the argument — the existing `eval`/`apply` machinery requires minimal changes.
@@ -124,21 +124,21 @@ struct prims {
 
 ```
 user input
-    → scan()       tokenise one token into buf[]
-    → parse()      build Lisp expression (CONS tree / TENS / ATOM / number)
-    → eval(x, env) reduce expression in global environment
-    → print(result)
-    → gc()         reset cons stack to ord(env), compact tensor heap
-    → repeat
+    -> scan()       tokenise one token into buf[]
+    -> parse()      build Lisp expression (CONS tree / TENS / ATOM / number)
+    -> eval(x, env) reduce expression in global environment
+    -> print(result)
+    -> gc()         reset cons stack to ord(env), compact tensor heap
+    -> repeat
 ```
 
 **File mode cycle:**
 
 ```
-open file → dup2 onto stdin
-    → while scan():
+open file -> dup2 onto stdin
+    -> while scan():
         parse() → eval() → print()
-    → fclose
+    -> fclose
 ```
 
 *(gc() is not currently called between file expressions — see constraints / known issues.)*
@@ -149,8 +149,8 @@ Basis is a single statically-linked CLI binary. No runtime dependencies beyond l
 
 ```
 source (*.lisp)
-    → basis -f file.lisp    file mode: evaluate all expressions
-    → basis                 REPL mode: interactive read-eval-print loop
+    -> basis -f file.lisp    file mode: evaluate all expressions
+    -> basis                 REPL mode: interactive read-eval-print loop
 ```
 
 #### 2.6 Other Diagrams
@@ -234,9 +234,11 @@ number   ::= "-"? [0-9]+ ("." [0-9]+)?
 ```
 
 Notes:
-- `[expr*]` rank is determined at eval time from the shapes of the evaluated elements: all-scalar elements → rank-1 vector; all equal-shaped rank-k elements → rank-(k+1) tensor.
+- `[expr*]` rank is determined at eval time from the shapes of the evaluated elements: all-scalar elements -> rank-1 vector; all equal-shaped rank-k elements -> rank-(k+1) tensor.
 
 ### Primitive Operations
+
+When working with tensors there are some meta information functions that will be needed.
 
 #### Structure Primitives
 
@@ -272,7 +274,7 @@ Matrix multiplication is a distinct primitive:
 eval, quote, if, cond, let*, lambda, define, and, or, not, eq?, <
 ```
 
-These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but operate on cons cells (s-expressions), not tensors.
+These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but only operate on cons cells (s-expressions), not tensors.
 
 ### Example Programs
 

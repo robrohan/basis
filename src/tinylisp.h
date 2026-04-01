@@ -12,6 +12,8 @@
 #define MAX_TENSORS  0x2000 /* max live tensors */
 #define MAX_RANK     0x08   /* max tensor dimensions */
 
+#define CORE_PRIM_COUNT 18  /* number of built-in core primitives (for test resets) */
+
 /* we only need two types to implement a Lisp interpreter:
         I    32-bit unsigned integer for tags, ordinals, heap/stack indices
         L    Lisp expression: a 64-bit IEEE 754 double used as a tagged union
@@ -82,10 +84,6 @@ L f_quote(L t, L _);
 L f_cons(L t, L e);
 L f_car(L t, L e);
 L f_cdr(L t, L e);
-L f_add(L t, L e);
-L f_sub(L t, L e);
-L f_mul(L t, L e);
-L f_div(L t, L e);
 L f_int(L t, L e);
 L f_lt(L t, L e);
 L f_eq(L t, L e);
@@ -112,32 +110,7 @@ L list(void);
 L quote(void);
 L atomic(void);
 
-void print(L);
-void printlist(L t);
-void gc(void);
-
-tensor_t *alloc_tensor(I rank, const I *shape, I len, const float *data);
-L f_shape(L t, L e);
-L f_rank(L t, L e);
-L f_slice(L t, L e);
-L f_head(L t, L e);
-L f_tail(L t, L e);
-L f_tensor_p(L t, L e);
-L f_matmul(L t, L e);
-L f_transpose(L t, L e);
-L f_vabs(L t, L e);
-L f_vsqrt(L t, L e);
-L f_normalize(L t, L e);
-L f_vpow(L t, L e);
-L f_zero(L t, L e);
-L f_dot(L t, L e);
-L f_length(L t, L e);
-L f_length2(L t, L e);
-L f_dist(L t, L e);
-L f_dist2(L t, L e);
-L f_veq(L t, L e);
-L f_gc(L t, L e);
-L f_make_tensor(L t, L e);
-L f_exp(L t, L e);
+void register_prim(const char *s, L (*f)(L, L));
+void gc_core(void);
 
 #endif /* TINYLISP_H */

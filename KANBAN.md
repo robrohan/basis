@@ -19,7 +19,8 @@ kanban-plugin: board
 - [ ] add maths functions sinf, cosf, etc
 - [ ] add `include`, `require` or `import` to parse other files and use functions etc in those files
 - [ ] (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error
-- [ ] How to make a service
+- [ ] Example of making a long running service
+- [ ] More compelling REPL using r2_termui.h
 
 ## 📝 Todo
 

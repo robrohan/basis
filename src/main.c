@@ -1,4 +1,6 @@
 #include "tinylisp.h"
+#include "tinytensor.h"
+#include "runtime.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -9,6 +11,7 @@ static void init(void)
     err = atom("ERR");
     tru = atom("#t");
     env = pair(tru, tru, nil);
+    register_tensor_prims();   /* add tensor prims to prim[] BEFORE building env */
     for (i = 0; prim[i].s; ++i)
         env = pair(atom(prim[i].s), box(PRIM, i), env);
 }

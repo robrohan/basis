@@ -4,6 +4,8 @@
 
 #include "r2_unit.h"
 #include "tinylisp.h"
+#include "tinytensor.h"
+#include "runtime.h"
 
 int r2_tests_run = 0;
 
@@ -15,10 +17,13 @@ static void setup(void)
     hp  = 0;
     sp  = N;
     th  = 0;
+    prim_count = CORE_PRIM_COUNT;  /* reset to core-only, then re-register */
+    prim[CORE_PRIM_COUNT].s = 0;   /* restore sentinel */
     nil = box(NIL, 0);
     err = atom("ERR");
     tru = atom("#t");
     env = pair(tru, tru, nil);
+    register_tensor_prims();
     for (i = 0; prim[i].s; i++)
         env = pair(atom(prim[i].s), box(PRIM, i), env);
 }
