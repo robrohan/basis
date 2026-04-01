@@ -4,6 +4,8 @@
 
 #include "r2_unit.h"
 #include "tinylisp.h"
+#include "tinytensor.h"
+#include "runtime.h"
 
 int r2_tests_run = 0;
 
@@ -15,10 +17,14 @@ static void setup(void)
     hp  = 0;
     sp  = N;
     th  = 0;
+    prim_count = CORE_PRIM_COUNT;  /* reset to core-only, then re-register */
+    prim[CORE_PRIM_COUNT].s = 0;   /* restore sentinel */
     nil = box(NIL, 0);
     err = atom("ERR");
     tru = atom("#t");
     env = pair(tru, tru, nil);
+    register_tensor_prims();
+    register_runtime_prims();
     for (i = 0; prim[i].s; i++)
         env = pair(atom(prim[i].s), box(PRIM, i), env);
 }
@@ -1306,6 +1312,35 @@ static const char *test_lambda_tensor_body(void)
 }
 
 /* -----------------------------------------------------------------------
+   print primitive
+   --------------------------------------------------------------------- */
+
+static const char *test_print_returns_value(void)
+{
+    setup();
+    /* (print 42) should return 42 */
+    L expr = cons(atom("print"), cons((L)42.0, nil));
+    L r = eval(expr, env);
+    r2_assert("print: returns numeric value", r == (L)42.0);
+    return NULL;
+}
+
+static const char *test_print_returns_tensor(void)
+{
+    setup();
+    /* (define v [1 2 3]) (print v) should return the tensor */
+    L mk   = cons(atom("make-tensor"),
+                  cons((L)1.0, cons((L)2.0, cons((L)3.0, nil))));
+    L def  = cons(atom("define"), cons(atom("v"), cons(mk, nil)));
+    eval(def, env);
+    L expr = cons(atom("print"), cons(atom("v"), nil));
+    L r = eval(expr, env);
+    r2_assert("print tensor: is TENS",    T(r) == TENS);
+    r2_assert("print tensor: data[0]==1", tensor_heap[ord(r)].data[0] == 1.f);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    Test runner
    --------------------------------------------------------------------- */
 
@@ -1386,6 +1421,8 @@ static const char *all_tests(void)
     r2_run_test(test_eval_quoted_tensor);
     r2_run_test(test_define_code_eval_later);
     r2_run_test(test_lambda_tensor_body);
+    r2_run_test(test_print_returns_value);
+    r2_run_test(test_print_returns_tensor);
     return NULL;
 }
 

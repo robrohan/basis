@@ -42,7 +42,7 @@ build:
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/runtime.c ./src/main.c \
 		-I./vendor \
 		-I./src \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm
@@ -52,7 +52,7 @@ test:
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/test_main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/runtime.c ./src/test_main.c \
 		-I./vendor \
 		-I./src \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm
@@ -64,7 +64,7 @@ release_cli:
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/runtime.c ./src/main.c \
 		-I./vendor \
 		-I./src \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm
