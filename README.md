@@ -1,10 +1,10 @@
 # 𝔹asis
 
-A Lisp interpreter where tensors are the fundamental data type. Vectors, matrices, and N-dimensional arrays are first-class values — not library types bolted on afterward. Code and data share the same tensor structure, preserving Lisp's homoiconicity.
+A Lisp interpreter where tensors are the fundamental data type. Vectors, matrices, and N-dimensional arrays are first-class values. Code and data share the same tensor structure, in an attempt to preserve Lisp's homoiconicity.
 
 ## The idea
 
-In standard Lisp, everything is a list. In Basis, everything is a tensor. A scalar is a rank-0 tensor, a vector rank-1, a matrix rank-2, and so on. The `[...]` literal syntax constructs tensors directly, and sub-expressions inside a tensor are evaluated at runtime, so you can write things like:
+In standard Lisp, everything is a list. In Basis, most everything is a tensor. A scalar is a rank-0 tensor, a vector rank-1, a matrix rank-2, and so on. The `[...]` literal syntax constructs tensors directly, and sub-expressions inside a tensor are evaluated at runtime, so you can write things like:
 
 ```lisp
 (define x 3)
