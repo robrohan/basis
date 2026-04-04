@@ -4,17 +4,17 @@
 
 					; ---- tensor literals ----
 					; scalar (rank 0)
-(print (rank [42]))
-					; => 1   (a 1-element vector, rank-1)
-
 (print (rank 42))
-					; => ERR (should be rank 0)
+					; => 0
 
 					; vector literal
 (print [1 2 3])
 					; => [1 2 3]
 
 					; ---- rank ----
+(print (rank [42]))
+					; => 1   (a 1-element vector, rank-1)
+
 (print (rank [1 2 3]))
 					; => 1
 

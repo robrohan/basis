@@ -36,7 +36,10 @@ static int run_file(const char *path)
     }
     rewind(stdin);
     while (scan())
+    {
         eval(parse(), env);
+        gc();
+    }
     fflush(stdout);
     fclose(fp);
     return 0;

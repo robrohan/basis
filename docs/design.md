@@ -54,14 +54,15 @@ The interpreter targets POSIX platforms (macOS, Linux). File mode uses `dup2` to
 
 The interpreter is a NaN-boxed tinylisp extended with a tensor heap. The value type `L` is a 64-bit `double`. High-order bits 48–63 encode a tag; the low 32 bits encode an ordinal (index into a heap or numeric value). Six tags are defined:
 
-| Tag    | Hex    | Meaning                                 |
-|--------|--------|-----------------------------------------|
-| `ATOM` | 0x7ff8 | Index into the atom string heap         |
-| `PRIM` | 0x7ff9 | Index into the primitive function table |
-| `CONS` | 0x7ffa | Index into the cons cell stack          |
-| `CLOS` | 0x7ffb | Index into the cons cell stack (closure)|
-| `NIL`  | 0x7ffc | The empty list `()`                     |
-| `TENS` | 0x7ffd | Index into the tensor heap              |
+| Tag    | Hex    | Meaning                                              |
+|--------|--------|------------------------------------------------------|
+| `ATOM` | 0x7ff8 | Index into the atom string heap                      |
+| `PRIM` | 0x7ff9 | Index into the primitive function table              |
+| `CONS` | 0x7ffa | Index into the cons cell stack                       |
+| `CLOS` | 0x7ffb | Index into the cons cell stack (closure)             |
+| `NIL`  | 0x7ffc | The empty list `()`                                  |
+| `TENS` | 0x7ffd | Index into the tensor heap                           |
+| `STR`  | 0x7ffe | Reserved for string literals (not yet implemented)   |
 
 Untagged doubles are plain IEEE 754 numbers (scalars).
 
@@ -234,7 +235,7 @@ number   ::= "-"? [0-9]+ ("." [0-9]+)?
 ```
 
 Notes:
-- `[expr*]` rank is determined at eval time from the shapes of the evaluated elements: all-scalar elements -> rank-1 vector; all equal-shaped rank-k elements -> rank-(k+1) tensor.
+- `[expr*]` rank is determined at eval time from the shapes of the evaluated elements. Scalar elements (including a single one) produce a rank-1 vector. All equal-shaped rank-k elements produce a rank-(k+1) tensor. Plain numbers (not inside `[...]`) are rank-0 scalars.
 
 ### Primitive Operations
 
@@ -242,14 +243,14 @@ When working with tensors there are some meta information functions that will be
 
 #### Structure Primitives
 
-| Primitive      | Description                                      |
-|----------------|--------------------------------------------------|
-| `(shape t)`    | Returns the shape as a vector, e.g. `[2 3]`      |
-| `(rank t)`     | Returns the number of dimensions (scalar)        |
-| `(slice t i)`  | Element or sub-tensor at index `i` along axis 0  |
-| `(head t)`     | First element along axis 0 (sugar for slice 0)   |
-| `(tail t)`     | All but first element along axis 0               |
-| `(tensor? x)`  | Returns `#t` if x is a tensor                    |
+| Primitive      | Description                                                         |
+|----------------|---------------------------------------------------------------------|
+| `(shape t)`    | Returns the shape as a vector, e.g. `[2 3]`                                         |
+| `(rank t)`     | Returns the number of dimensions. Returns 0 for plain numbers (scalars).            |
+| `(slice t i)`  | Element or sub-tensor at index `i` along axis 0                     |
+| `(head t)`     | First element along axis 0 (sugar for slice 0)                      |
+| `(tail t)`     | All but first element along axis 0                                  |
+| `(tensor? x)`  | Returns `#t` if x is a tensor                                       |
 
 #### Arithmetic Primitives
 
@@ -268,10 +269,26 @@ Matrix multiplication is a distinct primitive:
 (T A)           ; transpose (alias for transpose)
 ```
 
+#### Mutation
+
+`define` creates a new binding in the global environment. Calling it a second time with the same name does not update the existing binding; it prepends a shadow binding that hides the old one. This is fine for one-off definitions but causes unbounded environment growth in loops.
+
+`set!` is the explicit mutation primitive. It walks the environment, finds the first binding for the given name, and updates its value in place. It returns the new value and errors if the name is not already bound.
+
+```lisp
+(define x 1)
+(set! x 42)     ; x is now 42, env is unchanged in length
+x               ; => 42
+
+(set! y 1)      ; => ERR, y was not defined
+```
+
+The convention is: use `define` for the initial binding, use `set!` for all subsequent updates. This keeps intent explicit and prevents silent environment growth in training loops or iteration.
+
 #### Kept from tinylisp
 
 ```
-eval, quote, if, cond, let*, lambda, define, and, or, not, eq?, <
+eval, quote, if, cond, let*, lambda, define, set!, and, or, not, eq?, <
 ```
 
 These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but only operate on cons cells (s-expressions), not tensors.
