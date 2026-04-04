@@ -10,9 +10,7 @@ kanban-plugin: board
 - [ ] Add (princ x) primitive following Common Lisp conventions: human-readable output without escapes (for strings, print bytes without surrounding quotes)
 - [ ] Add (defun name (args) "docstring" body) following Emacs Lisp convention: sugar for (define name (lambda (args) body)) with the docstring stored on the binding so (doc name) can retrieve it; depends on string literals being implemented first
 - [ ] car and cdr don't seem to work with tensors
-- [ ] eq? does not work with tensors (element wise?)
 - [ ] Format output of a matrix in a way that is easier to read, but still conforms to homoiconicity
-- [ ] add maths functions sinf, cosf, etc
 - [ ] (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error
 - [ ] Example of making a long running service
 - [ ] More compelling REPL using r2_termui.h
@@ -26,6 +24,9 @@ kanban-plugin: board
 ## ✅ Done
 
 **Complete**
+- [x] Add sin/cos primitives: scalar or element-wise on tensors; same pattern as exp; added to tinytensor.c alongside abs/sqrt
+- [x] Fix eq? for tensors: moved to runtime.c (where both heaps are visible); deep equality checks rank + shape + all elements via tensor_equal(); also fixed vec= to use the same shared helper
+- [x] Add 3D camera matrix demo (test_data/projection_test.lisp): view matrix from position/yaw/pitch, perspective projection, combined camera matrix, point transforms; rotation entries are live s-expressions evaluated at call time
 - [x] Add string literal support ("..." syntax): scanner collects bytes between quotes, atomic() interns raw bytes in atom heap with STR NaN-box tag; self-evaluating; print displays with quotes; raw bytes sent to stdout (UTF-8 terminal renders correctly); S()/free_S() reserved for rune-aware primitives
 - [x] Add (load "file.lisp") primitive: swaps input_stream FILE* pointer so nested loads and REPL resumption work without stdio buffer corruption; accepts STR or ATOM path argument
 - [x] Add (set! x val) primitive for explicit mutation: updates the first matching binding in env in-place, returns val, errors if x is not already defined. Updated xor_net.lisp weight updates to use set!.
