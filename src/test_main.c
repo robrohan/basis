@@ -1341,6 +1341,104 @@ static const char *test_print_returns_tensor(void)
 }
 
 /* -----------------------------------------------------------------------
+   set! — in-place mutation
+   --------------------------------------------------------------------- */
+
+static const char *test_set_bang_scalar(void)
+{
+    setup();
+    /* (define x 1) (set! x 42) => x is now 42 */
+    L def = cons(atom("define"), cons(atom("x"), cons((L)1.0, nil)));
+    eval(def, env);
+    L set = cons(atom("set!"), cons(atom("x"), cons((L)42.0, nil)));
+    L ret = eval(set, env);
+    r2_assert("set! returns new value",        equ(ret, (L)42.0));
+    r2_assert("set! mutates binding",          equ(eval(atom("x"), env), (L)42.0));
+    return NULL;
+}
+
+static const char *test_set_bang_tensor(void)
+{
+    setup();
+    /* (define W [1 2 3]) (set! W [7 8 9]) => W is now [7 8 9] */
+    float d1[] = {1.f, 2.f, 3.f};
+    float d2[] = {7.f, 8.f, 9.f};
+    L v1 = make_vec(3, d1);
+    L v2 = make_vec(3, d2);
+    L def = cons(atom("define"), cons(atom("W"), cons(v1, nil)));
+    eval(def, env);
+    L set = cons(atom("set!"), cons(atom("W"), cons(v2, nil)));
+    eval(set, env);
+    L val = eval(atom("W"), env);
+    r2_assert("set! tensor: is TENS",     T(val) == TENS);
+    r2_assert("set! tensor: data[0]==7",  tensor_heap[ord(val)].data[0] == 7.f);
+    r2_assert("set! tensor: data[2]==9",  tensor_heap[ord(val)].data[2] == 9.f);
+    return NULL;
+}
+
+static const char *test_set_bang_unbound_is_err(void)
+{
+    setup();
+    /* (set! undefined-var 1) => ERR (not defined) */
+    L set = cons(atom("set!"), cons(atom("no-such-var"), cons((L)1.0, nil)));
+    r2_assert("set! unbound returns ERR", equ(eval(set, env), err));
+    return NULL;
+}
+
+static const char *test_set_bang_no_shadow(void)
+{
+    setup();
+    /* define once, set! twice — env must not grow with shadow bindings */
+    L def = cons(atom("define"), cons(atom("n"), cons((L)0.0, nil)));
+    eval(def, env);
+    L env_after_define = env;
+    L set1 = cons(atom("set!"), cons(atom("n"), cons((L)1.0, nil)));
+    eval(set1, env);
+    L set2 = cons(atom("set!"), cons(atom("n"), cons((L)2.0, nil)));
+    eval(set2, env);
+    r2_assert("set! does not grow env",  equ(env, env_after_define));
+    r2_assert("n is 2 after two set!s",  equ(eval(atom("n"), env), (L)2.0));
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   rank — scalars and rank-0 tensors
+   --------------------------------------------------------------------- */
+
+static const char *test_rank_scalar_number(void)
+{
+    setup();
+    /* (rank 4) => 0  (a plain number is a rank-0 scalar) */
+    L expr = cons(atom("rank"), cons((L)4.0, nil));
+    r2_assert("rank of plain number is 0", equ(eval(expr, env), (L)0.0));
+    return NULL;
+}
+
+static const char *test_rank1_single_tensor(void)
+{
+    setup();
+    /* (make-tensor 5) => rank-1 vector with one element, shape [1] */
+    L expr = cons(atom("make-tensor"), cons((L)5.0, nil));
+    L r = eval(expr, env);
+    r2_assert("single-elem tensor is TENS",       T(r) == TENS);
+    r2_assert("single-elem tensor rank == 1",     tensor_heap[ord(r)].rank == 1);
+    r2_assert("single-elem tensor shape[0] == 1", tensor_heap[ord(r)].shape[0] == 1);
+    r2_assert("single-elem tensor data[0]==5",    tensor_heap[ord(r)].data[0] == 5.f);
+    /* (rank (make-tensor 5)) => 1 */
+    L rank_expr = cons(atom("rank"), cons(expr, nil));
+    r2_assert("(rank [5]) == 1", equ(eval(rank_expr, env), (L)1.0));
+    return NULL;
+}
+
+static const char *test_str_tag_reserved(void)
+{
+    setup();
+    r2_assert("STR tag is 0x7ffe", STR == 0x7ffe);
+    r2_assert("STR tag distinct from TENS", STR != TENS);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    Test runner
    --------------------------------------------------------------------- */
 
@@ -1423,6 +1521,13 @@ static const char *all_tests(void)
     r2_run_test(test_lambda_tensor_body);
     r2_run_test(test_print_returns_value);
     r2_run_test(test_print_returns_tensor);
+    r2_run_test(test_set_bang_scalar);
+    r2_run_test(test_set_bang_tensor);
+    r2_run_test(test_set_bang_unbound_is_err);
+    r2_run_test(test_set_bang_no_shadow);
+    r2_run_test(test_rank_scalar_number);
+    r2_run_test(test_rank1_single_tensor);
+    r2_run_test(test_str_tag_reserved);
     return NULL;
 }
 

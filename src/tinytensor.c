@@ -232,11 +232,12 @@ static L f_shape(L t, L e)
     return box(TENS, (I)(alloc_tensor(1, s, tens->rank, sd) - tensor_heap));
 }
 
-/* (rank t) -> scalar */
+/* (rank t) -> scalar; returns 0 for plain numbers (rank-0 scalars) */
 static L f_rank(L t, L e)
 {
     L x = car(evlis(t, e));
-    return T(x) == TENS ? (L)tensor_heap[ord(x)].rank : err;
+    if (T(x) != TENS) return 0.0;
+    return (L)tensor_heap[ord(x)].rank;
 }
 
 /* (slice t i) -> element (scalar) or sub-tensor (row) at index i along axis 0 */
@@ -537,7 +538,7 @@ static L f_make_tensor(L t, L e)
     }
     else
     {
-        /* all elements must be scalars -> rank-1 vector */
+        /* all elements must be scalars */
         n = 0;
         tmp = t;
         while (!is_nil(tmp))

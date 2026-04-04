@@ -69,14 +69,14 @@
 		      (dz1 (* dh1 (step z1)))
 					; W2 -= lr * dW2
 					;   gradient descent step for output weights
-		      (_ (define W2 (- W2 (* lr dW2))))
+		      (_ (set! W2 (- W2 (* lr dW2))))
 					; b1 -= lr * dz1
 					;   gradient descent step for hidden biases
-		      (_ (define b1 (- b1 (* lr dz1))))
+		      (_ (set! b1 (- b1 (* lr dz1))))
 					; W1 -= lr * outer(dz1, x)
 					;   gradient descent step for input weights: outer2 builds the 2x2
 					;   gradient matrix
-		      (define W1 (- W1 (* lr (outer2 dz1 x))))
+		      (set! W1 (- W1 (* lr (outer2 dz1 x))))
 		      )
 		    ))
 
@@ -115,6 +115,11 @@
 		(if (< 0 n)
 		    (let*
 		      (_ (train-epoch 0))
+		      ; gc between epochs: frees temporary tensors from the epoch
+		      ; before the tail call. safe here because n is a plain number,
+		      ; already read, and the recursive call does not need any of
+		      ; the let* locals.
+		      (_ (gc))
 		      (train (- n 1))
 		      )
 		    ())
@@ -122,7 +127,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(train 80)
+(train 1000)
 ; (print W1)
 ; (print W2)
 

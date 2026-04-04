@@ -12,7 +12,7 @@ I hp = 0, sp = N;
     Basically, this uses the highorder bits to create types within a 64 bit
     value, and uses the lower 32 bits for the values. See box()
 */
-const I ATOM = 0x7ff8, PRIM = 0x7ff9, CONS = 0x7ffa, CLOS = 0x7ffb, NIL = 0x7ffc, TENS = 0x7ffd;
+const I ATOM = 0x7ff8, PRIM = 0x7ff9, CONS = 0x7ffa, CLOS = 0x7ffb, NIL = 0x7ffc, TENS = 0x7ffd, STR = 0x7ffe;
 
 /* tensor heap: pool of tensor_t structs; th is the next free slot.
    tensor data arrays are malloc'd and freed by gc_tensors() */
@@ -252,6 +252,23 @@ L f_define(L t, L e)
     return car(t);
 }
 
+/* (set! v x) — update the first binding of v in env in-place; error if unbound */
+L f_set(L t, L e)
+{
+    L var = car(t);
+    L val = eval(car(cdr(t)), e);
+    L p = env;
+    while (T(p) == CONS) {
+        L binding = car(p);
+        if (equ(car(binding), var)) {
+            cell[ord(binding)] = val; /* overwrite cdr of (v . old) in place */
+            return val;
+        }
+        p = cdr(p);
+    }
+    return err; /* variable not found */
+}
+
 /* table of Lisp core primitives, each has a name s and function pointer f */
 struct prims prim[MAX_PRIMS] = {
     {"eval",    f_eval},
@@ -272,6 +289,7 @@ struct prims prim[MAX_PRIMS] = {
     {"lambda",  f_lambda},
     {"define",  f_define},
     {"def",     f_define},
+    {"set!",    f_set},
     {0}
 };
 int prim_count = CORE_PRIM_COUNT;

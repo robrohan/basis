@@ -77,6 +77,12 @@ Start the REPL:
 (define 🥧 3.14159)
 (* 🥧 2)
 ; => 6.28318
+
+; set! updates a binding in place (use define once, set! after)
+(define W [0.1 0.2 0.3])
+(set! W (+ W 1))
+W
+; => [1.1 1.2 1.3]
 ```
 
 ## Documentation
@@ -86,4 +92,4 @@ Start the REPL:
 
 ## Examples
 
-- [XOR neural network](test_data/xor_net.lisp) — 2-layer network with ReLU hidden layer, sigmoid output, and backpropagation; demonstrates tensor arithmetic, matmul, and in-place weight updates
+- [XOR neural network](test_data/xor_net.lisp) - 2-layer network with ReLU hidden layer, sigmoid output, and backpropagation; demonstrates tensor arithmetic, matmul, and weight updates with `set!`

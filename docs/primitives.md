@@ -17,7 +17,8 @@
 | `or` | `(or x y)` | Logical or |
 | `not` | `(not x)` | Logical not |
 | `lambda` | `(lambda (x) (* x x))` | Anonymous function |
-| `define` | `(define sq (lambda (x) (* x x)))` | Bind name in environment |
+| `define` | `(define sq (lambda (x) (* x x)))` | Create a new binding in the environment |
+| `set!` | `(set! x 42)` | Update an existing binding in place; error if unbound |
 | `let*` | `(let* (x 1) (y 2) (+ x y))` | Sequential local bindings |
 | `int` | `(int 3.9)` | Truncate to integer |
 | `<` | `(< 1 2)` | Less than |
@@ -40,7 +41,7 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 |---|---|---|---|
 | `zero` | `(zero 4)` | `[0 0 0 0]` | Rank-1 zero tensor of length n |
 | `shape` | `(shape [[1 2][3 4]])` | `[2 2]` | Dimension sizes as a vector |
-| `rank` | `(rank [[1 2][3 4]])` | `2` | Number of dimensions |
+| `rank` | `(rank [[1 2][3 4]])` | `2` | Number of dimensions. Returns 0 for plain numbers (scalars). |
 | `slice` | `(slice [10 20 30] 1)` | `20` | Element or row at index i |
 | `head` | `(head [10 20 30])` | `10` | First element or row |
 | `tail` | `(tail [10 20 30])` | `[20 30]` | All elements after the first |
