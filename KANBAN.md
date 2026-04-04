@@ -6,9 +6,8 @@ kanban-plugin: board
 
 ## 🧊 Backlog
 
-- [ ] Add string literal support ("..." syntax) with scanner changes and a STRING NaN-box tag or atom-backed storage; use r2_strings.h s8/rune types for the implementation so that string length, slice, and print are character-aware (rune counts) not byte-counts
-- [ ] Add (princ x) primitive following Common Lisp conventions: human-readable output without escapes (depends on string literals)
-- [ ] add `include`, `require` or `import` to parse other files and use functions etc in those files
+- [ ] Add string primitives: (string-length s) using s8.len for rune count, (string-ref s i) for rune at index, (string-append s1 s2) — use S()/free_S() around operations that need rune-aware counting, raw bytes for storage
+- [ ] Add (princ x) primitive following Common Lisp conventions: human-readable output without escapes (for strings, print bytes without surrounding quotes)
 - [ ] Add (defun name (args) "docstring" body) following Emacs Lisp convention: sugar for (define name (lambda (args) body)) with the docstring stored on the binding so (doc name) can retrieve it; depends on string literals being implemented first
 - [ ] car and cdr don't seem to work with tensors
 - [ ] eq? does not work with tensors (element wise?)
@@ -27,6 +26,8 @@ kanban-plugin: board
 ## ✅ Done
 
 **Complete**
+- [x] Add string literal support ("..." syntax): scanner collects bytes between quotes, atomic() interns raw bytes in atom heap with STR NaN-box tag; self-evaluating; print displays with quotes; raw bytes sent to stdout (UTF-8 terminal renders correctly); S()/free_S() reserved for rune-aware primitives
+- [x] Add (load "file.lisp") primitive: swaps input_stream FILE* pointer so nested loads and REPL resumption work without stdio buffer corruption; accepts STR or ATOM path argument
 - [x] Add (set! x val) primitive for explicit mutation: updates the first matching binding in env in-place, returns val, errors if x is not already defined. Updated xor_net.lisp weight updates to use set!.
 - [x] Fix GC in file mode: call gc() after each top-level expression in run_file(); also added explicit (gc) call inside xor_net.lisp train loop between epochs so tensor heap does not overflow during long training runs.
 - [x] Add (print x) primitive: prints x then newline, returns x (CL convention, usable inline)

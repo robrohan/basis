@@ -190,11 +190,6 @@ L f_lt(L t, L e)
     return t = evlis(t, e), car(t) - car(cdr(t)) < 0 ? tru : nil;
 }
 
-L f_eq(L t, L e)
-{
-    return t = evlis(t, e), equ(car(t), car(cdr(t))) ? tru : nil;
-}
-
 L f_pair(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -278,7 +273,6 @@ struct prims prim[MAX_PRIMS] = {
     {"cdr",     f_cdr},
     {"int",     f_int},
     {"<",       f_lt},
-    {"eq?",     f_eq},
     {"pair?",   f_pair},
     {"or",      f_or},
     {"and",     f_and},
@@ -330,11 +324,12 @@ L eval(L x, L e)
 /* tokenization buffer: 256 bytes accommodates atoms up to ~64 emoji (4 bytes each) */
 char buf[256];
 int see = ' ';
+FILE *input_stream = NULL; /* initialised to stdin in main() */
 
 /* advance to the next character */
 void look(void)
 {
-    int c = getchar();
+    int c = getc(input_stream);
     see = c;
 }
 
@@ -371,6 +366,19 @@ char scan(void)
     } /* EOF */
     if (seeing('(') || seeing(')') || seeing('\'') || seeing('[') || seeing(']'))
         buf[i++] = (char)get();
+    else if (seeing('"'))
+    {
+        buf[i++] = (char)get(); /* store opening " as marker for atomic() */
+        while (see != '"' && see >= 0 && i < 254)
+        {
+            int bytes = utf8_len((char)see);
+            int b;
+            for (b = 0; b < bytes && i < 254; b++)
+                buf[i++] = (char)get();
+        }
+        if (see == '"')
+            look(); /* consume closing " without storing it */
+    }
     else
         do
         {
@@ -415,11 +423,17 @@ L quote(void)
     return cons(atom("quote"), cons(Read(), nil));
 }
 
-/* return a parsed atomic Lisp expression (a number or an atom) */
+/* return a parsed atomic Lisp expression (a number, atom, or string literal) */
 L atomic(void)
 {
     L n;
     I i;
+    if (buf[0] == '"')
+    {
+        /* intern raw bytes (without the leading ") into the atom heap, tag as STR */
+        L a = atom(buf + 1);
+        return box(STR, ord(a));
+    }
     return (sscanf(buf, "%lg%n", &n, &i) > 0 && !buf[i]) ? n : atom(buf);
 }
 

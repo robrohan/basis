@@ -28,13 +28,7 @@ static int run_file(const char *path)
         fprintf(stderr, "basis: cannot open '%s'\n", path);
         return 1;
     }
-    if (dup2(fileno(fp), fileno(stdin)) < 0)
-    {
-        fclose(fp);
-        fprintf(stderr, "basis: cannot redirect '%s'\n", path);
-        return 1;
-    }
-    rewind(stdin);
+    input_stream = fp;
     while (scan())
     {
         eval(parse(), env);
@@ -79,6 +73,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    input_stream = stdin;
     init();
     return file ? run_file(file) : (repl(), 0);
 }

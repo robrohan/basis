@@ -417,6 +417,34 @@ static L f_exp(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
+/* (sin x) — sine; scalar or element-wise on tensors */
+static L f_sin(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS)
+        return (L)sin((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++)
+        out->data[i] = sinf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (cos x) — cosine; scalar or element-wise on tensors */
+static L f_cos(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS)
+        return (L)cos((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++)
+        out->data[i] = cosf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
 /* (normalize v) — scale to unit length; vec2/vec4 fast paths */
 static L f_normalize(L t, L e){TENS_UNARY_DISP(vec2_normalize, vec4_normalize, vecn_normalize)}
 
@@ -467,6 +495,17 @@ static L f_dist(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist, vec4_dist, vecn_dis
 /* (dist2 v1 v2) — distance squared -> scalar; vec2/vec4 fast paths */
 static L f_dist2(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist_sqrd, vec4_dist_sqrd, vecn_dist_sqrd)}
 
+/* shared deep-equality check: same rank, shape, and all elements match */
+int tensor_equal(const tensor_t *a, const tensor_t *b)
+{
+    I i;
+    if (a->rank != b->rank || a->len != b->len)
+        return 0;
+    for (i = 0; i < a->rank; i++)
+        if (a->shape[i] != b->shape[i]) return 0;
+    return vecn_equals(a->data, b->data, (int)a->len);
+}
+
 /* (vec= v1 v2) — element-wise equality -> #t or () */
 static L f_veq(L t, L e)
 {
@@ -474,9 +513,7 @@ static L f_veq(L t, L e)
     L xa = car(t), xb = car(cdr(t));
     if (T(xa) != TENS || T(xb) != TENS)
         return err;
-    tensor_t *a = &tensor_heap[ord(xa)];
-    tensor_t *b = &tensor_heap[ord(xb)];
-    return vecn_equals(a->data, b->data, (int)a->len) ? tru : nil;
+    return tensor_equal(&tensor_heap[ord(xa)], &tensor_heap[ord(xb)]) ? tru : nil;
 }
 
 /* (make-tensor e1 e2 ...) -- runtime backend for [ ] tensor literals */
@@ -627,6 +664,8 @@ void register_tensor_prims(void)
     register_prim("abs",         f_vabs);
     register_prim("sqrt",        f_vsqrt);
     register_prim("exp",         f_exp);
+    register_prim("sin",         f_sin);
+    register_prim("cos",         f_cos);
     register_prim("normalize",   f_normalize);
     register_prim("pow",         f_vpow);
     register_prim("zero",        f_zero);
