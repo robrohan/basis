@@ -14,7 +14,11 @@ kanban-plugin: board
 - [ ] (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error
 - [ ] Example of making a long running service
 - [ ] More compelling REPL using r2_termui.h
-- [ ] Add (match pattern expr) and (unify p1 p2) primitives for symbolic inference: match binds variables in a pattern against an s-expression, unify finds substitutions that make two terms equal — enables transitive KB queries like (car is-a vehicle is-a ...) over association list knowledge bases
+- [ ] KB tensor properties: storing tensors in KB facts requires a helper like (fact s p o) since quote prevents tensor literal evaluation — (fact 'car 'bbox [2.0 1.5 4.5]) works but is ugly; proper fix is a (triple s p o) builtin or quasiquote/unquote support
+- [ ] Add (unify p1 p2) for bidirectional pattern matching: finds substitutions that make two terms equal, both terms can contain variables; needed for theorem proving and constraint solving beyond one-directional match
+- [ ] Build kb.lisp standard library: kb-assert, kb-retract, kb-query (filter by match), kb-infer (transitive is-a chain walking) — all Lisp on top of match primitive
+- [ ] Neurosymbolic demo: knowledge base with physical properties (mass, bounding box as tensors) alongside is-a/has-a facts; query KB for object properties, combine with tensor ops for similarity
+- [ ] Very simple physics world model: mass ratio crush check, bounding sphere overlap, a handful of rules (crush/bounce/slide); designed to answer LLM-posed questions like "what happens if X hits Y"; depends on KB and match being solid first
 - [ ] Batched training: parallelize train-epoch across CPU cores — each example is independent, spawn N threads each running train-one on a subset, accumulate gradients, single weight update step; revisit if project moves beyond research POC
 
 ## 📝 Todo
@@ -24,6 +28,7 @@ kanban-plugin: board
 ## ✅ Done
 
 **Complete**
+- [x] Add (match pattern data) primitive in tinysymbolic.c: ?-prefixed atoms are variables, returns bindings alist (? stripped from keys) or ERR; consistent variable binding checked; handles atoms, lists, numbers, nil
 - [x] Add sin/cos primitives: scalar or element-wise on tensors; same pattern as exp; added to tinytensor.c alongside abs/sqrt
 - [x] Fix eq? for tensors: moved to runtime.c (where both heaps are visible); deep equality checks rank + shape + all elements via tensor_equal(); also fixed vec= to use the same shared helper
 - [x] Add 3D camera matrix demo (test_data/projection_test.lisp): view matrix from position/yaw/pitch, perspective projection, combined camera matrix, point transforms; rotation entries are live s-expressions evaluated at call time
