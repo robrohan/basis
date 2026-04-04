@@ -417,6 +417,34 @@ static L f_exp(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
+/* (sin x) — sine; scalar or element-wise on tensors */
+static L f_sin(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS)
+        return (L)sin((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++)
+        out->data[i] = sinf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (cos x) — cosine; scalar or element-wise on tensors */
+static L f_cos(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS)
+        return (L)cos((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++)
+        out->data[i] = cosf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
 /* (normalize v) — scale to unit length; vec2/vec4 fast paths */
 static L f_normalize(L t, L e){TENS_UNARY_DISP(vec2_normalize, vec4_normalize, vecn_normalize)}
 
@@ -636,6 +664,8 @@ void register_tensor_prims(void)
     register_prim("abs",         f_vabs);
     register_prim("sqrt",        f_vsqrt);
     register_prim("exp",         f_exp);
+    register_prim("sin",         f_sin);
+    register_prim("cos",         f_cos);
     register_prim("normalize",   f_normalize);
     register_prim("pow",         f_vpow);
     register_prim("zero",        f_zero);
