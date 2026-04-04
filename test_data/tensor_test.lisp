@@ -2,45 +2,48 @@
 ; Run with: echo '...' | ./build/Darwin/arm64/basis.debug
 ; or load interactively at the REPL
 
-					; ---- tensor literals ----
+(load "./test_data/mod_testing.lisp")
+
+
+(print "-- literals --")
 					; scalar (rank 0)
-(print (rank 42))
+(assert (rank 42) 0)
 					; => 0
 
 					; vector literal
-(print [1 2 3])
+(assert (print [1 2 3]) [1 2 3])
 					; => [1 2 3]
 
-					; ---- rank ----
-(print (rank [42]))
+(print "-- rank --")
+(assert (rank [42]) 1)
 					; => 1   (a 1-element vector, rank-1)
 
-(print (rank [1 2 3]))
+(assert (rank [1 2 3]) 1)
 					; => 1
 
-(print (rank [10 20 30 40]))
+(assert (rank [10 20 30 40]) 1)
 					; => 1
 
-					; ---- shape ----
-(print (shape [1 2 3]))
+(print "-- shape --")
+(assert (shape [1 2 3]) [3])
 					; => [3]
 
-(print (shape [10 20 30 40]))
+(assert (shape [10 20 30 40]) [4])
 					; => [4]
-(print (shape 0))
+(assert (shape 0) ERR)
 					; => ERR
 
-					; ---- tensor? predicate ----
-(print (tensor? [1 2 3]))
+(print "-- tensor? predicate --")
+(assert (tensor? [1 2 3]) #t)
 					; => #t
 
-(print (tensor? 42))
+(assert (tensor? 42) ())
 					; => ()
 
-(print (tensor? (quote hello)))
+(assert (tensor? (quote hello)) ())
 					; => ()
 
-					; ---- slice ----
+(print "-- slice --")
 (print (slice [10 20 30] 0))
 					; => 10
 
@@ -50,43 +53,43 @@
 (print (slice [10 20 30] 2))
 					; => 30
 
-					; ---- element-wise arithmetic ----
-(print (+ [1 2 3] [4 5 6]))
+(print "-- element-wise arithmetic --")
+(assert (print (+ [1 2 3] [4 5 6])) [5 7 9])
 					; => [5 7 9]
 
-(print (- [10 20 30] [1 2 3]))
+(assert (print (- [10 20 30] [1 2 3])) [9 18 27])
 					; => [9 18 27]
 
-(print (* [2 3 4] [1 2 3]))
+(assert (print (* [2 3 4] [1 2 3])) [2 6 12])
 					; => [2 6 12]
 
-(print (/ [10 20 30] [2 4 5]))
+(assert (print (/ [10 20 30] [2 4 5]))  [5 5 6])
 					; => [5 5 6]
 
-					; ---- scalar broadcast ----
-(print(+ [1 2 3] 10))
+(print "-- scalar broadcast --")
+(assert (print (+ [1 2 3] 10) [11 12 13]))
 					; => [11 12 13]
 
-(print (* [1 2 3] 2))
+(assert (print (* [1 2 3] 2)) [2 4 6])
 					; => [2 4 6]
 
-(print (- [10 20 30] 5))
+(assert (print (- [10 20 30] 5)) [5 15 25])
 					; => [5 15 25]
 
 (print (/ [10 20 30] 10))
 					; => [1 2 3]
 
-					; ---- tensor in define / lambda ----
+(print "-- tensor in define / lambda --")
 (define v [3 1 4 1 5])
-(print (shape v))
+(assert (shape v) 5)
 					; => [5]
 
-(print (slice v 2))
+(assert (slice v 2) 4)
 					; => 4
 
-(print (+ v [1 1 1 1 1]))
+(assert (print (+ v [1 1 1 1 1]) [4 2 5 2 6]))
 					; => [4 2 5 2 6]
 
-					; ---- nested expressions ----
-(print (+ [1 2 3] (* [2 2 2] [3 4 5])))
+(print "-- nested expressions --")
+(assert (print (+ [1 2 3] (* [2 2 2] [3 4 5]))) [7 10 13])
 					; => [7 10 13]

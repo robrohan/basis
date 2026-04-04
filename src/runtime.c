@@ -71,6 +71,8 @@ void print(L x)
         printlist(x);
     else if (T(x) == CLOS)
         printf("{%u}", ord(x));
+    else if (T(x) == STR)
+        printf("\"%s\"", A + ord(x));
     else if (T(x) == TENS)
     {
         tensor_t *t = &tensor_heap[ord(x)];
@@ -105,8 +107,42 @@ static L f_gc(L t, L e)
     return nil;
 }
 
+/* (load file.lisp) — evaluate all expressions in a file, then return ()
+   The filename is an unquoted atom: (load test_data/assert.lisp)
+   Swaps input_stream so nested loads and REPL resumption both work correctly. */
+static L f_load(L t, L e)
+{
+    L arg = car(evlis(t, e));
+    if (T(arg) != STR && T(arg) != ATOM)
+        return err;
+
+    const char *path = A + ord(arg);
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        fprintf(stderr, "load: cannot open '%s'\n", path);
+        return err;
+    }
+
+    FILE *saved_stream = input_stream;
+    int   saved_see    = see;
+
+    input_stream = fp;
+    see = ' '; /* reset lookahead for new input stream */
+
+    while (scan()) {
+        eval(parse(), env);
+        gc();
+    }
+
+    fclose(fp);
+    input_stream = saved_stream;
+    see = saved_see; /* restore lookahead so caller's scanner is unaffected */
+    return nil;
+}
+
 void register_runtime_prims(void)
 {
     register_prim("print", f_print);
     register_prim("gc", f_gc);
+    register_prim("load", f_load);
 }
