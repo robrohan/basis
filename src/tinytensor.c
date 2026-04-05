@@ -40,6 +40,20 @@ L tens_binop(L a, L b, char op)
         if (T(b) == TENS)
         {
             tensor_t *tb = &tensor_heap[ord(b)];
+            /* row broadcast: (rows x cols) OP (cols,) — add/scale a bias vector
+               across every row.  Handles e.g. (@ x W) + bias. */
+            if (ta->rank == 2 && tb->rank == 1 && ta->shape[1] == tb->len) {
+                I cols = ta->shape[1];
+                for (i = 0; i < ta->len; i++) {
+                    switch (op) {
+                    case '+': out->data[i] = ta->data[i] + tb->data[i % cols]; break;
+                    case '-': out->data[i] = ta->data[i] - tb->data[i % cols]; break;
+                    case '*': out->data[i] = ta->data[i] * tb->data[i % cols]; break;
+                    case '/': out->data[i] = ta->data[i] / tb->data[i % cols]; break;
+                    }
+                }
+                return box(TENS, (I)(out - tensor_heap));
+            }
             for (i = 0; i < ta->len; i++)
             {
                 switch (op)
@@ -307,6 +321,22 @@ static L f_tensor_p(L t, L e)
     return T(x) == TENS ? tru : nil;
 }
 
+/* plain C matmul fallback for dimensions that exceed unsigned char range (>255).
+   r2_maths mat_mul uses unsigned char for dimensions so overflows silently
+   for GPT-2 sized matrices (768, 2304, 3072, 50257 …). */
+static void matmul_large(const float *ma, const float *mb,
+                          I rows, I inner, I cols, float *out)
+{
+    I i, j, k;
+    for (i = 0; i < rows; i++)
+        for (j = 0; j < cols; j++) {
+            float s = 0.f;
+            for (k = 0; k < inner; k++)
+                s += ma[i * inner + k] * mb[k * cols + j];
+            out[i * cols + j] = s;
+        }
+}
+
 /* (matmul A B) / (@ A B) — matrix product */
 static L f_matmul(L t, L e)
 {
@@ -330,7 +360,14 @@ static L f_matmul(L t, L e)
     if (!out_data)
         abort();
 
-    mat_mul(a->data, b->data, (unsigned char)r1, (unsigned char)c1, (unsigned char)r2, (unsigned char)c2, out_data);
+    /* r2_maths mat_mul uses unsigned char dims (max 255).
+       Fall back to our own loop for any dimension that exceeds that. */
+    if (r1 > 255 || c1 > 255 || c2 > 255)
+        matmul_large(a->data, b->data, r1, c1, c2, out_data);
+
+    else
+        mat_mul(a->data, b->data, (unsigned char)r1, (unsigned char)c1,
+                (unsigned char)r2, (unsigned char)c2, out_data);
 
     L result;
     if (a->rank == 1 || b->rank == 1)
@@ -388,12 +425,12 @@ static L f_vabs(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
-/* (sqrt v) — element-wise square root; vec4 fast path */
+/* (sqrt v) — square root; scalar passthrough, element-wise on tensors */
 static L f_vsqrt(L t, L e)
 {
     L x = car(evlis(t, e));
     if (T(x) != TENS)
-        return err;
+        return (L)sqrt((double)x);
     tensor_t *a = &tensor_heap[ord(x)];
     tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
     if (a->len == 4)
@@ -596,6 +633,89 @@ static L f_layer_norm(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
+/* (reshape x [d0 d1 ...]) -> new tensor with same data but different shape.
+   Total element count must match.  Useful for e.g. turning a flat vector into
+   a 2-D matrix: (reshape v [1 768]) */
+static L f_reshape(L t, L e)
+{
+    I i;
+    t = evlis(t, e);
+    L x   = car(t);
+    L shp = car(cdr(t));
+    if (T(x) != TENS || T(shp) != TENS) return err;
+    tensor_t *src = &tensor_heap[ord(x)];
+    tensor_t *sv  = &tensor_heap[ord(shp)];
+    I new_rank = sv->len;
+    if (new_rank > MAX_RANK) return err;
+    I new_shape[MAX_RANK];
+    I new_len = 1;
+    for (i = 0; i < new_rank; i++) {
+        new_shape[i] = (I)sv->data[i];
+        new_len *= new_shape[i];
+    }
+    if (new_len != src->len) return err;
+    return box(TENS, (I)(alloc_tensor(new_rank, new_shape, src->len, src->data) - tensor_heap));
+}
+
+/* (slice-range x start end) -> rows (or elements) in [start, end).
+   Works on rank-1 (element range) and rank-2 (row range). */
+static L f_slice_range(L t, L e)
+{
+    I i;
+    t = evlis(t, e);
+    L x     = car(t);
+    I start = (I)(double)car(cdr(t));
+    I end   = (I)(double)car(cdr(cdr(t)));
+    if (T(x) != TENS || start >= end) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    if (end > a->shape[0]) return err;
+    I n = end - start;
+    if (a->rank == 1) {
+        I sh[1]; sh[0] = n;
+        return box(TENS, (I)(alloc_tensor(1, sh, n, a->data + start) - tensor_heap));
+    }
+    I row = a->len / a->shape[0];
+    I sh[MAX_RANK];
+    sh[0] = n;
+    for (i = 1; i < a->rank; i++) sh[i] = a->shape[i];
+    return box(TENS, (I)(alloc_tensor(a->rank, sh, n * row, a->data + start * row) - tensor_heap));
+}
+
+/* (col-slice M j) -> extract column j of a rank-2 matrix as a rank-1 vector.
+   Avoids allocating the full transposed matrix for single-column lookups
+   (e.g. embedding table lookups). */
+static L f_col_slice(L t, L e)
+{
+    I i;
+    t = evlis(t, e);
+    L x = car(t);
+    I j = (I)(double)car(cdr(t));
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    if (a->rank != 2 || j >= a->shape[1]) return err;
+    I rows = a->shape[0], cols = a->shape[1];
+    float *buf = malloc(rows * sizeof(float));
+    if (!buf) abort();
+    for (i = 0; i < rows; i++) buf[i] = a->data[i * cols + j];
+    I sh[1]; sh[0] = rows;
+    tensor_t *out = alloc_tensor(1, sh, rows, buf);
+    free(buf);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (argmax x) -> index of the maximum element (integer scalar).
+   For rank-2, scans all elements and returns the flat index. */
+static L f_argmax(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i, best = 0;
+    if (T(x) != TENS) return (L)0.0;
+    tensor_t *a = &tensor_heap[ord(x)];
+    for (i = 1; i < a->len; i++)
+        if (a->data[i] > a->data[best]) best = i;
+    return (L)(double)best;
+}
+
 /* shared deep-equality check: same rank, shape, and all elements match */
 int tensor_equal(const tensor_t *a, const tensor_t *b)
 {
@@ -615,6 +735,36 @@ static L f_veq(L t, L e)
     if (T(xa) != TENS || T(xb) != TENS)
         return err;
     return tensor_equal(&tensor_heap[ord(xa)], &tensor_heap[ord(xb)]) ? tru : nil;
+}
+
+/* (vstack A B)
+   Stack tensor A on top of tensor B row-wise.
+   Both must be rank-2 with equal column counts, or rank-1 (treated as 1-row).
+   Returns a rank-2 tensor of shape [(rows_A + rows_B) x cols]. */
+static L f_vstack(L t, L e)
+{
+    I i;
+    t = evlis(t, e);
+    L a = car(t), b = car(cdr(t));
+    if (T(a) != TENS || T(b) != TENS) return err;
+    tensor_t *ta = tensor_heap + ord(a);
+    tensor_t *tb = tensor_heap + ord(b);
+
+    I rows_a = ta->rank == 1 ? 1 : ta->shape[0];
+    I cols_a = ta->rank == 1 ? ta->len : ta->shape[ta->rank - 1];
+    I rows_b = tb->rank == 1 ? 1 : tb->shape[0];
+    I cols_b = tb->rank == 1 ? tb->len : tb->shape[tb->rank - 1];
+
+    if (cols_a != cols_b) return err;
+
+    I rows = rows_a + rows_b;
+    I shape[2] = {rows, cols_a};
+    tensor_t *out = alloc_tensor(2, shape, rows * cols_a, NULL);
+    for (i = 0; i < (I)(rows_a * cols_a); i++)
+        out->data[i] = ta->data[i];
+    for (i = 0; i < (I)(rows_b * cols_b); i++)
+        out->data[rows_a * cols_a + i] = tb->data[i];
+    return box(TENS, (I)(out - tensor_heap));
 }
 
 /* (make-tensor e1 e2 ...) -- runtime backend for [ ] tensor literals */
@@ -782,4 +932,9 @@ void register_tensor_prims(void)
     register_prim("log",         f_log);
     register_prim("softmax",     f_softmax);
     register_prim("layer-norm",  f_layer_norm);
+    register_prim("reshape",     f_reshape);
+    register_prim("slice-range", f_slice_range);
+    register_prim("col-slice",   f_col_slice);
+    register_prim("argmax",      f_argmax);
+    register_prim("vstack",      f_vstack);
 }

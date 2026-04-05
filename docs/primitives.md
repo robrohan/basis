@@ -40,11 +40,16 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 | Primitive | Example | Result | Description |
 |---|---|---|---|
 | `zero` | `(zero 4)` | `[0 0 0 0]` | Rank-1 zero tensor of length n |
+| `make-tensor` | `(make-tensor 3 0.0)` | `[0 0 0]` | Create rank-1 tensor of n elements filled with value |
 | `shape` | `(shape [[1 2][3 4]])` | `[2 2]` | Dimension sizes as a vector |
 | `rank` | `(rank [[1 2][3 4]])` | `2` | Number of dimensions. Returns 0 for plain numbers (scalars). |
-| `slice` | `(slice [10 20 30] 1)` | `20` | Element or row at index i |
+| `slice` | `(slice [10 20 30] 1)` | `20` | Element or row at index i along axis 0 |
+| `slice-range` | `(slice-range M 2 5)` | `[row2 row3 row4]` | Sub-matrix of rows [start, end) along axis 0 |
+| `col-slice` | `(col-slice M i)` | row vector | Extract column i as a rank-1 vector (used for embedding lookup) |
 | `head` | `(head [10 20 30])` | `10` | First element or row |
 | `tail` | `(tail [10 20 30])` | `[20 30]` | All elements after the first |
+| `reshape` | `(reshape [1 2 3 4] [2 2])` | `[[1 2][3 4]]` | Change shape without moving data; new shape given as tensor |
+| `vstack` | `(vstack A B)` | matrix | Stack two tensors row-wise; rank-1 inputs treated as single rows |
 | `tensor?` | `(tensor? [1 2])` | `#t` | True if x is a tensor |
 
 ## Matrix Operations
@@ -68,3 +73,54 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 | `sqrt` | `(sqrt [4 9 16])` | `[2 3 4]` | Element-wise square root |
 | `pow` | `(pow [2 3 4] 2)` | `[4 9 16]` | Element-wise power |
 | `vec=` | `(vec= [1 2] [1 2])` | `#t` | Element-wise equality |
+| `sin` | `(sin [0 1.57])` | `[0 1]` | Element-wise sine (radians) |
+| `cos` | `(cos [0 3.14])` | `[1 -1]` | Element-wise cosine (radians) |
+| `exp` | `(exp [0 1])` | `[1 2.718]` | Element-wise e^x |
+| `log` | `(log [1 2.718])` | `[0 1]` | Element-wise natural log |
+
+## Reductions
+
+| Primitive | Example | Result | Description |
+|---|---|---|---|
+| `sum` | `(sum [1 2 3])` | `6` | Sum all elements → scalar |
+| `amax` | `(amax [3 1 4 1 5])` | `5` | Maximum element value → scalar |
+| `argmax` | `(argmax [0.1 0.7 0.2])` | `1` | Index of the maximum element → scalar |
+
+## Neural Network Ops
+
+| Primitive | Example | Description |
+|---|---|---|
+| `softmax` | `(softmax logits)` | Numerically stable softmax over a rank-1 or rank-2 tensor |
+| `layer-norm` | `(layer-norm x eps)` | Layer normalisation: subtract mean, divide by std; apply scale/shift separately |
+
+## Symbolic
+
+| Primitive | Example | Description |
+|---|---|---|
+| `match` | `(match '(?x is ?y) '(sky is blue))` | Unify pattern against data; `?`-prefixed atoms are variables; returns bindings alist or `ERR` |
+
+## I/O and Files
+
+| Primitive | Example | Description |
+|---|---|---|
+| `print` | `(print x)` | Print x followed by newline; returns x |
+| `load` | `(load "file.lisp")` | Evaluate a Lisp file; accepts string or atom path |
+
+## GGUF Model Loading
+
+GGUF is the binary format used by llama.cpp and related tools to distribute quantised model weights.
+
+| Primitive | Example | Description |
+|---|---|---|
+| `load-gguf` | `(load-gguf "models/gpt2.Q4_0.gguf")` | Load all tensors from a GGUF file into the global environment; each tensor is bound to its GGUF name as an atom (e.g. `token_embd.weight`) |
+| `load-gguf-vocab` | `(load-gguf-vocab "models/gpt2.Q4_0.gguf")` | Load the BPE vocabulary and merge rules from the GGUF metadata; required before calling tokenizer primitives |
+
+## Tokenizer
+
+These primitives implement GPT-2 Byte Pair Encoding (BPE). `load-gguf-vocab` must be called first.
+
+| Primitive | Example | Description |
+|---|---|---|
+| `tokenize` | `(tokenize "hello world")` | Encode a string to a rank-1 tensor of integer token IDs |
+| `detokenize` | `(detokenize toks)` | Decode a rank-1 tensor of token IDs back to a string |
+| `token->str` | `(token->str 15496)` | Decode a single token ID to a string |

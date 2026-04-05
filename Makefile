@@ -13,11 +13,26 @@ C_ERRS += -Wall -Wextra -Wpedantic \
 		-Wno-unused -Wno-unused-parameter
 STD:=c11
 
+# Third-party GGUF reader (antirez/gguf-tools, BSD-2-Clause)
+# Compiled without our strict warning flags to avoid noise from vendor code.
+GGUF_INC  := -I./vendor/gguf
+GGUF_OBJS  = ./build/$(PLATFORM)/$(CPU)/gguflib.o ./build/$(PLATFORM)/$(CPU)/fp16.o
+
+./build/$(PLATFORM)/$(CPU)/gguflib.o: ./vendor/gguf/gguflib.c ./vendor/gguf/gguflib.h
+	mkdir -p ./build/$(PLATFORM)/$(CPU)/
+	$(CC) -O2 -std=$(STD) -D_POSIX_C_SOURCE=200809L $(GGUF_INC) \
+		-c ./vendor/gguf/gguflib.c -o $@
+
+./build/$(PLATFORM)/$(CPU)/fp16.o: ./vendor/gguf/fp16.c ./vendor/gguf/fp16.h
+	mkdir -p ./build/$(PLATFORM)/$(CPU)/
+	$(CC) -O2 -std=$(STD) -c ./vendor/gguf/fp16.c -o $@
+
 hash = $(shell git log --pretty=format:'%h' -n 1)
 
 help:
 	@echo "make clean"
 	@echo "make fetch"
+	@echo "make download_gpt2"
 	@echo "make build"
 	@echo "make test"
 	@echo "make release_cli"
@@ -26,45 +41,63 @@ help:
 clean:
 	rm -rf build
 
+download_gpt2:
+	mkdir -p ./models
+	curl -L https://huggingface.co/QuantFactory/gpt2-GGUF/resolve/main/gpt2.Q4_0.gguf \
+		-o ./models/gpt2.Q4_0.gguf
+
 fetch:
 	curl https://raw.githubusercontent.com/robrohan/r2/refs/heads/main/r2_maths.h > ./vendor/r2_maths.h
 	curl https://raw.githubusercontent.com/robrohan/r2/refs/heads/main/r2_strings.h > ./vendor/r2_strings.h
 	curl https://raw.githubusercontent.com/robrohan/r2/refs/heads/main/r2_termui.h > ./vendor/r2_termui.h
 	curl https://raw.githubusercontent.com/robrohan/r2/refs/heads/main/r2_unit.h > ./vendor/r2_unit.h
+	mkdir -p ./vendor/gguf
+	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/gguflib.h > ./vendor/gguf/gguflib.h
+	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/gguflib.c > ./vendor/gguf/gguflib.c
+	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/fp16.h    > ./vendor/gguf/fp16.h
+	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/fp16.c    > ./vendor/gguf/fp16.c
+	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/bf16.h    > ./vendor/gguf/bf16.h
+	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/LICENSE   > ./vendor/gguf/LICENSE
 
 run:
 	 ./build/$(PLATFORM)/$(CPU)/$(APP).debug \
 		/tenlib/common.lisp \
 		/tenlib/math.lisp
 
-build:
+build: $(GGUF_OBJS)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
+		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
+		$(GGUF_INC) \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm
 
-test:
+test: $(GGUF_OBJS)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/test_main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/test_main.c \
+		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
+		$(GGUF_INC) \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm
 
 	./build/$(PLATFORM)/$(CPU)/$(APP).test
 
-release_cli:
+release_cli: $(GGUF_OBJS)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
+		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
+		$(GGUF_INC) \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm
