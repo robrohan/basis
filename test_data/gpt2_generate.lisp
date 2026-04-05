@@ -215,7 +215,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Entry point
 
-
 (define N_TOKENS 10)
 (define prompt "once upon a time ")
 
