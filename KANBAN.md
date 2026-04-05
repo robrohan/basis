@@ -21,6 +21,9 @@ kanban-plugin: board
 - [ ] Very simple physics world model: mass ratio crush check, bounding sphere overlap, a handful of rules (crush/bounce/slide); designed to answer LLM-posed questions like "what happens if X hits Y"; depends on KB and match being solid first
 - [ ] Batched training: parallelize train-epoch across CPU cores — each example is independent, spawn N threads each running train-one on a subset, accumulate gradients, single weight update step; revisit if project moves beyond research POC
 
+- [ ] Fix multi-head attention in gpt2_generate.lisp: split Q/K/V into 12 heads of 64 dims, run attention per-head, vstack results; also add causal mask (upper-triangular -inf before softmax)
+- [ ] Fix generate loop termination: (eq? n 0) may not reliably catch float zero — replace with (< 0 n) as the continue condition
+
 ## 📝 Todo
 
 ## 👨‍💻 Doing (0)

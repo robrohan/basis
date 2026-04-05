@@ -15,8 +15,10 @@
 
 (print "loading weights...")
 (load-gguf "models/gpt2.Q4_0.gguf")
+
 (print "loading vocab...")
 (load-gguf-vocab "models/gpt2.Q4_0.gguf")
+
 (print "ready")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -213,7 +215,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Entry point
 
-(define N_TOKENS 100)
+(define N_TOKENS 10)
 (define prompt "once upon a time ")
 
 (print "--- prompt ---")
