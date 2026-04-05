@@ -225,18 +225,18 @@
 
 (print "computing logits...")
 
-; Apply final layer norm to last token's hidden state
+					; Apply final layer norm to last token's hidden state
 (define last-hidden (reshape (slice x 3) [1 768]))  ; (1 x 768)
 (define normed (gpt2-ln last-hidden output_norm.weight output_norm.bias))
 
-; Project to vocabulary: (1 x 768) @ (768 x 50257) = (1 x 50257)
+					; Project to vocabulary: (1 x 768) @ (768 x 50257) = (1 x 50257)
 (define logits (@ normed output.weight))
 
-; Predicted next token = argmax over vocab
+					; Predicted next token = argmax over vocab
 (define next-tok (argmax logits))
 (print "predicted next token id:")
 (print next-tok)
 
-; Show the top logit value as a sanity check
+					; Show the top logit value as a sanity check
 (print "max logit value:")
 (print (amax logits))

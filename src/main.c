@@ -3,6 +3,7 @@
 #include "tinysymbolic.h"
 #include "runtime.h"
 #include "gguf_loader.h"
+#include "tokenizer.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -17,6 +18,7 @@ static void init(void)
     register_symbolic_prims();
     register_runtime_prims();
     register_gguf_prims();
+    register_tokenizer_prims();
     for (i = 0; prim[i].s; ++i)
         env = pair(atom(prim[i].s), box(PRIM, i), env);
 }

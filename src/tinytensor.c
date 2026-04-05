@@ -737,6 +737,36 @@ static L f_veq(L t, L e)
     return tensor_equal(&tensor_heap[ord(xa)], &tensor_heap[ord(xb)]) ? tru : nil;
 }
 
+/* (vstack A B)
+   Stack tensor A on top of tensor B row-wise.
+   Both must be rank-2 with equal column counts, or rank-1 (treated as 1-row).
+   Returns a rank-2 tensor of shape [(rows_A + rows_B) x cols]. */
+static L f_vstack(L t, L e)
+{
+    I i;
+    t = evlis(t, e);
+    L a = car(t), b = car(cdr(t));
+    if (T(a) != TENS || T(b) != TENS) return err;
+    tensor_t *ta = tensor_heap + ord(a);
+    tensor_t *tb = tensor_heap + ord(b);
+
+    I rows_a = ta->rank == 1 ? 1 : ta->shape[0];
+    I cols_a = ta->rank == 1 ? ta->len : ta->shape[ta->rank - 1];
+    I rows_b = tb->rank == 1 ? 1 : tb->shape[0];
+    I cols_b = tb->rank == 1 ? tb->len : tb->shape[tb->rank - 1];
+
+    if (cols_a != cols_b) return err;
+
+    I rows = rows_a + rows_b;
+    I shape[2] = {rows, cols_a};
+    tensor_t *out = alloc_tensor(2, shape, rows * cols_a, NULL);
+    for (i = 0; i < (I)(rows_a * cols_a); i++)
+        out->data[i] = ta->data[i];
+    for (i = 0; i < (I)(rows_b * cols_b); i++)
+        out->data[rows_a * cols_a + i] = tb->data[i];
+    return box(TENS, (I)(out - tensor_heap));
+}
+
 /* (make-tensor e1 e2 ...) -- runtime backend for [ ] tensor literals */
 static L f_make_tensor(L t, L e)
 {
@@ -906,4 +936,5 @@ void register_tensor_prims(void)
     register_prim("slice-range", f_slice_range);
     register_prim("col-slice",   f_col_slice);
     register_prim("argmax",      f_argmax);
+    register_prim("vstack",      f_vstack);
 }

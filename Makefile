@@ -32,6 +32,7 @@ hash = $(shell git log --pretty=format:'%h' -n 1)
 help:
 	@echo "make clean"
 	@echo "make fetch"
+	@echo "make download_gpt2"
 	@echo "make build"
 	@echo "make test"
 	@echo "make release_cli"
@@ -39,6 +40,11 @@ help:
 
 clean:
 	rm -rf build
+
+download_gpt2:
+	mkdir -p ./models
+	curl -L https://huggingface.co/QuantFactory/gpt2-GGUF/resolve/main/gpt2.Q4_0.gguf \
+		-o ./models/gpt2.Q4_0.gguf
 
 fetch:
 	curl https://raw.githubusercontent.com/robrohan/r2/refs/heads/main/r2_maths.h > ./vendor/r2_maths.h
@@ -63,7 +69,7 @@ build: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
@@ -75,7 +81,7 @@ test: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/test_main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/test_main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
@@ -89,7 +95,7 @@ release_cli: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
