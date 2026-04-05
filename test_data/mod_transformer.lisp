@@ -12,11 +12,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Activations (in Lisp on top of existing primitives)
 
-; relu(x) = 0.5 * (x + |x|)  — works element-wise on scalars and tensors
+					; relu(x) = 0.5 * (x + |x|)  — works element-wise on
+					; scalars and tensors
 (define relu (lambda (x) (* 0.5 (+ x (abs x)))))
 
-; gelu approx: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
-; tanh(y) = (exp(2y) - 1) / (exp(2y) + 1)
+					; gelu approx:
+					; 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
+					; tanh(y) = (exp(2y) - 1) / (exp(2y) + 1)
 (define tanh- (lambda (y)
     (let* (e2y (exp (* 2.0 y)))
     (/ (- e2y 1.0) (+ e2y 1.0)))))
