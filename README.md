@@ -90,6 +90,14 @@ W
 - [Language design](docs/design.md) — syntax, BNF, evaluation model
 - [Primitives reference](docs/primitives.md) — full list of built-in functions
 
-## Examples
+## Example files
 
-- [XOR neural network](test_data/xor_net.lisp) - 2-layer network with ReLU hidden layer, sigmoid output, and backpropagation; demonstrates tensor arithmetic, matmul, and weight updates with `set!`
+| File | Description |
+|---|---|
+| [test_data/cust_xor_net.lisp](test_data/cust_xor_net.lisp) | 2-layer XOR network: ReLU hidden layer, sigmoid output, backprop weight updates with `set!` |
+| [test_data/cust_projection.lisp](test_data/cust_projection.lisp) | 3D camera matrix demo: view matrix, perspective projection, live s-expression matrix entries |
+| [test_data/cust_matrix.lisp](test_data/cust_matrix.lisp) | Basic matrix construction and arithmetic scratch pad |
+| [test_data/mod_kb.lisp](test_data/mod_kb.lisp) | Knowledge base library: assert/retract/query facts using `match` |
+| [test_data/mod_transformer.lisp](test_data/mod_transformer.lisp) | Transformer building blocks: attention, feed-forward, layer norm, GeLU |
+| [test_data/gpt2_generate.lisp](test_data/gpt2_generate.lisp) | Autoregressive text generation with GPT-2 weights loaded from a GGUF file |
+| [test_data/test_tokenizer.lisp](test_data/test_tokenizer.lisp) | GPT-2 BPE tokenizer demo: `tokenize`, `detokenize`, `token->str` |
