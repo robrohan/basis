@@ -62,7 +62,7 @@ The interpreter is a NaN-boxed tinylisp extended with a tensor heap. The value t
 | `CLOS` | 0x7ffb | Index into the cons cell stack (closure)             |
 | `NIL`  | 0x7ffc | The empty list `()`                                  |
 | `TENS` | 0x7ffd | Index into the tensor heap                           |
-| `STR`  | 0x7ffe | Reserved for string literals (not yet implemented)   |
+| `STR`  | 0x7ffe | Index into the atom heap (string literal)            |
 
 Untagged doubles are plain IEEE 754 numbers (scalars).
 
@@ -203,6 +203,19 @@ Nesting depth determines rank. Elements inside `[...]` are evaluated at runtime,
 [(+ x 1) x]   ; => [4 3]
 ```
 
+#### String Literals
+
+Strings are written with double quotes. They are self-evaluating and stored as raw UTF-8 bytes in the atom heap with the `STR` NaN-box tag.
+
+```lisp
+"hello world"          ; string literal
+(print "hello world")  ; prints: hello world
+```
+
+Strings can be passed to primitives that accept path arguments (`load`, `load-gguf`, `load-gguf-vocab`) or printed directly. The `print` primitive outputs raw bytes without surrounding quotes; displayed strings render correctly on UTF-8 terminals.
+
+Rune-aware string operations (`string-length`, `string-ref`, `string-append`) are planned but not yet implemented.
+
 #### Expression Syntax
 
 An expression is a parenthesised sequence: the first element is the operator, the rest are arguments:
@@ -227,11 +240,13 @@ Expressions evaluate inside-out:
 program  ::= expr*
 expr     ::= atom
            | number
+           | string
            | "'" expr
            | "(" expr* ")"
            | "[" expr* "]"
-atom     ::= <UTF-8 sequence not containing ( ) [ ] or whitespace>
+atom     ::= <UTF-8 sequence not containing ( ) [ ] " or whitespace>
 number   ::= "-"? [0-9]+ ("." [0-9]+)?
+string   ::= '"' <any bytes except '"'> '"'
 ```
 
 Notes:
@@ -239,18 +254,24 @@ Notes:
 
 ### Primitive Operations
 
-When working with tensors there are some meta information functions that will be needed.
+See [docs/primitives.md](primitives.md) for the full reference. The sections below describe the major categories and any design constraints worth noting.
 
-#### Structure Primitives
+#### Tensor Constructors and Inspection
 
-| Primitive      | Description                                                         |
-|----------------|---------------------------------------------------------------------|
-| `(shape t)`    | Returns the shape as a vector, e.g. `[2 3]`                                         |
-| `(rank t)`     | Returns the number of dimensions. Returns 0 for plain numbers (scalars).            |
-| `(slice t i)`  | Element or sub-tensor at index `i` along axis 0                     |
-| `(head t)`     | First element along axis 0 (sugar for slice 0)                      |
-| `(tail t)`     | All but first element along axis 0                                  |
-| `(tensor? x)`  | Returns `#t` if x is a tensor                                       |
+| Primitive           | Description                                                                      |
+|---------------------|----------------------------------------------------------------------------------|
+| `(zero n)`          | Rank-1 zero tensor of length n                                                   |
+| `(make-tensor n v)` | Rank-1 tensor of n elements filled with value v                                  |
+| `(shape t)`         | Returns the shape as a vector, e.g. `[2 3]`                                      |
+| `(rank t)`          | Returns the number of dimensions. Returns 0 for plain numbers (scalars).         |
+| `(slice t i)`       | Element or sub-tensor at index `i` along axis 0                                  |
+| `(slice-range t s e)` | Sub-tensor of rows `[s, e)` along axis 0                                       |
+| `(col-slice M i)`   | Extract column `i` as a rank-1 vector (used for embedding lookup)                |
+| `(head t)`          | First element along axis 0                                                       |
+| `(tail t)`          | All elements after the first                                                     |
+| `(reshape t shape)` | Change shape without moving data; new shape given as a tensor                    |
+| `(vstack A B)`      | Stack two tensors row-wise; rank-1 inputs treated as single rows                 |
+| `(tensor? x)`       | Returns `#t` if x is a tensor                                                    |
 
 #### Arithmetic Primitives
 
@@ -261,12 +282,36 @@ Arithmetic operates element-wise on tensors with scalar broadcast:
 (* [[1 2] [3 4]] [[5 6] [7 8]])   ; element-wise multiply
 ```
 
-Matrix multiplication is a distinct primitive:
+Matrix multiplication and transpose are distinct primitives:
 
 ```lisp
 (@ A B)         ; matrix multiply (alias for matmul)
 (matmul A B)
 (T A)           ; transpose (alias for transpose)
+```
+
+#### Vector Math
+
+Element-wise and reduction operations over tensors:
+
+```lisp
+(dot [1 2 3] [4 5 6])      ; => 32
+(normalize [3 4])           ; => [0.6 0.8]
+(sum [1 2 3 4])             ; => 10
+(argmax [0.1 0.7 0.2])      ; => 1
+(softmax logits)            ; numerically stable softmax
+(layer-norm x eps)          ; subtract mean, divide by std
+```
+
+See primitives.md for the full list (`abs`, `sqrt`, `pow`, `exp`, `log`, `sin`, `cos`, `length`, `length2`, `dist`, `dist2`, `amax`).
+
+#### Symbolic
+
+`match` performs one-directional unification. Pattern variables are prefixed with `?`. Returns an association list of bindings or `ERR` on failure:
+
+```lisp
+(match '(?x is ?y) '(sky is blue))
+; => ((x . sky) (y . blue))
 ```
 
 #### Mutation
@@ -285,10 +330,12 @@ x               ; => 42
 
 The convention is: use `define` for the initial binding, use `set!` for all subsequent updates. This keeps intent explicit and prevents silent environment growth in training loops or iteration.
 
+**`set!` with lists:** `set!` performs an in-place pointer update. Assigning a list value (e.g. a cons chain) can confuse the GC because the old cons cells stay live. Use `define` for list variables and reserve `set!` for scalars and tensors.
+
 #### Kept from tinylisp
 
 ```
-eval, quote, if, cond, let*, lambda, define, set!, and, or, not, eq?, <
+eval, quote, if, cond, let*, lambda, define, def, set!, and, or, not, eq?, <, >
 ```
 
 These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but only operate on cons cells (s-expressions), not tensors.
@@ -304,6 +351,13 @@ These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but only
 
 **Empty list is `()`:** the atom `nil` is not pre-bound in the environment — evaluating it returns `ERR`. Always use `()` for the empty list in base cases.
 
+#### I/O and Files
+
+```lisp
+(print x)               ; print x followed by newline; returns x
+(load "file.lisp")      ; evaluate a Lisp file
+```
+
 #### GGUF Model Weights
 
 Basis can load pretrained model weights directly from GGUF files (the format used by llama.cpp). Each tensor in the file is interned as a global binding named after its GGUF key:
@@ -318,8 +372,9 @@ BPE tokenization for GPT-2 style models is also available:
 
 ```lisp
 (load-gguf-vocab "models/gpt2.Q4_0.gguf")
-(tokenize "once upon a time")   ; => [27078 2402 257 640]
+(tokenize "once upon a time")       ; => [27078 2402 257 640]
 (detokenize [27078 2402 257 640])   ; => "once upon a time"
+(token->str 15496)                  ; => "Hello"
 ```
 
 ### Example Programs

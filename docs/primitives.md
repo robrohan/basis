@@ -18,10 +18,12 @@
 | `not` | `(not x)` | Logical not |
 | `lambda` | `(lambda (x) (* x x))` | Anonymous function |
 | `define` | `(define sq (lambda (x) (* x x)))` | Create a new binding in the environment |
+| `def` | `(def sq (lambda (x) (* x x)))` | Alias for `define` |
 | `set!` | `(set! x 42)` | Update an existing binding in place; error if unbound |
 | `let*` | `(let* (x 1) (y 2) (+ x y))` | Sequential local bindings |
 | `int` | `(int 3.9)` | Truncate to integer |
 | `<` | `(< 1 2)` | Less than |
+| `>` | `(> 2 1)` | Greater than |
 | `gc` | `(gc)` | Force a garbage collection cycle |
 
 ## Arithmetic
