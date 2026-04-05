@@ -190,6 +190,11 @@ L f_lt(L t, L e)
     return t = evlis(t, e), car(t) - car(cdr(t)) < 0 ? tru : nil;
 }
 
+L f_gt(L t, L e)
+{
+    return t = evlis(t, e), car(t) - car(cdr(t)) > 0 ? tru : nil;
+}
+
 L f_pair(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -273,6 +278,7 @@ struct prims prim[MAX_PRIMS] = {
     {"cdr",     f_cdr},
     {"int",     f_int},
     {"<",       f_lt},
+    {">",       f_gt},
     {"pair?",   f_pair},
     {"or",      f_or},
     {"and",     f_and},
