@@ -293,6 +293,35 @@ eval, quote, if, cond, let*, lambda, define, set!, and, or, not, eq?, <
 
 These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but only operate on cons cells (s-expressions), not tensors.
 
+**`let*` single-body constraint:** each `let*` form takes exactly one body expression. To sequence multiple effects (print, then gc, then recurse), chain nested `let*` forms with dummy bindings:
+
+```lisp
+(let* (result (compute x))
+(let* (_ (print result))
+(let* (_ (gc))
+(next-step result))))
+```
+
+**Empty list is `()`:** the atom `nil` is not pre-bound in the environment — evaluating it returns `ERR`. Always use `()` for the empty list in base cases.
+
+#### GGUF Model Weights
+
+Basis can load pretrained model weights directly from GGUF files (the format used by llama.cpp). Each tensor in the file is interned as a global binding named after its GGUF key:
+
+```lisp
+(load-gguf "models/gpt2.Q4_0.gguf")
+; token_embd.weight, blk.0.attn_qkv.weight, ... are now bound
+(shape token_embd.weight)   ; => [50257 768]
+```
+
+BPE tokenization for GPT-2 style models is also available:
+
+```lisp
+(load-gguf-vocab "models/gpt2.Q4_0.gguf")
+(tokenize "once upon a time")   ; => [27078 2402 257 640]
+(detokenize [27078 2402 257 640])   ; => "once upon a time"
+```
+
 ### Example Programs
 
 ```lisp
@@ -317,7 +346,10 @@ These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but only
 ; => 6.28318
 ```
 
-See also: [XOR neural network example](../test_data/xor_net.lisp)
+See also:
+- [XOR neural network example](../test_data/xor_net.lisp)
+- [GPT-2 tokenizer demo](../test_data/test_tokenizer.lisp)
+- [GPT-2 autoregressive generation](../test_data/gpt2_generate.lisp)
 
 
 ## 4. Appendices and References
