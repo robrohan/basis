@@ -373,12 +373,12 @@ static L f_transpose(L t, L e)
     return result;
 }
 
-/* (abs v) — element-wise absolute value; vec4 fast path */
+/* (abs v) — absolute value; scalar passthrough, element-wise on tensors */
 static L f_vabs(L t, L e)
 {
     L x = car(evlis(t, e));
     if (T(x) != TENS)
-        return err;
+        return (double)x < 0.0 ? (L)(-(double)x) : x;
     tensor_t *a = &tensor_heap[ord(x)];
     tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
     if (a->len == 4)
@@ -494,6 +494,107 @@ static L f_dist(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist, vec4_dist, vecn_dis
 
 /* (dist2 v1 v2) — distance squared -> scalar; vec2/vec4 fast paths */
 static L f_dist2(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist_sqrd, vec4_dist_sqrd, vecn_dist_sqrd)}
+
+/* (sum x) -> sum of all elements as scalar; scalar passthrough */
+static L f_sum(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS) return x;
+    tensor_t *a = &tensor_heap[ord(x)];
+    double s = 0.0;
+    for (i = 0; i < a->len; i++) s += (double)a->data[i];
+    return (L)s;
+}
+
+/* (amax x) -> maximum element as scalar; scalar passthrough */
+static L f_amax(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS) return x;
+    tensor_t *a = &tensor_heap[ord(x)];
+    float m = a->data[0];
+    for (i = 1; i < a->len; i++) if (a->data[i] > m) m = a->data[i];
+    return (L)(double)m;
+}
+
+/* (log x) -> element-wise natural log; scalar passthrough */
+static L f_log(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS) return (L)log((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++) out->data[i] = logf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* numerically-stable softmax applied in-place to float[n] */
+static void softmax_vec(float *v, I n)
+{
+    I i;
+    float m = v[0], s = 0.f;
+    for (i = 1; i < n; i++) if (v[i] > m) m = v[i];
+    for (i = 0; i < n; i++) { v[i] = expf(v[i] - m); s += v[i]; }
+    for (i = 0; i < n; i++) v[i] /= s;
+}
+
+/* (softmax x) -> rank-1: vector softmax; rank-2: row-wise softmax */
+static L f_softmax(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, a->data);
+    if (a->rank == 1) {
+        softmax_vec(out->data, out->len);
+    } else if (a->rank == 2) {
+        I cols = a->shape[1];
+        for (i = 0; i < a->shape[0]; i++)
+            softmax_vec(out->data + i * cols, cols);
+    } else {
+        return err;
+    }
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* layer normalization applied in-place to float[n] with epsilon eps */
+static void layernorm_vec(float *v, I n, float eps)
+{
+    I i;
+    double mean = 0.0, var = 0.0, d;
+    for (i = 0; i < n; i++) mean += (double)v[i];
+    mean /= n;
+    for (i = 0; i < n; i++) { d = (double)v[i] - mean; var += d * d; }
+    var /= n;
+    float scale = 1.f / sqrtf((float)var + eps);
+    for (i = 0; i < n; i++) v[i] = (float)((double)v[i] - mean) * scale;
+}
+
+/* (layer-norm x eps) -> rank-1: single LN; rank-2: per-row LN (one token per row) */
+static L f_layer_norm(L t, L e)
+{
+    I i;
+    t = evlis(t, e);
+    L x = car(t);
+    float eps = (float)(double)car(cdr(t));
+    if (T(x) != TENS) return err;
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, a->data);
+    if (a->rank == 1) {
+        layernorm_vec(out->data, out->len, eps);
+    } else if (a->rank == 2) {
+        I cols = a->shape[1];
+        for (i = 0; i < a->shape[0]; i++)
+            layernorm_vec(out->data + i * cols, cols, eps);
+    } else {
+        return err;
+    }
+    return box(TENS, (I)(out - tensor_heap));
+}
 
 /* shared deep-equality check: same rank, shape, and all elements match */
 int tensor_equal(const tensor_t *a, const tensor_t *b)
@@ -676,4 +777,9 @@ void register_tensor_prims(void)
     register_prim("dist2",       f_dist2);
     register_prim("vec=",        f_veq);
     register_prim("make-tensor", f_make_tensor);
+    register_prim("sum",         f_sum);
+    register_prim("amax",        f_amax);
+    register_prim("log",         f_log);
+    register_prim("softmax",     f_softmax);
+    register_prim("layer-norm",  f_layer_norm);
 }
