@@ -321,32 +321,6 @@ static L f_tensor_p(L t, L e)
     return T(x) == TENS ? tru : nil;
 }
 
-/* plain C transpose fallback for dimensions that exceed unsigned char range (>255).
-   r2_maths mat_transpose uses unsigned char for r,c — silently truncates to 0 for
-   GPT-2 sized matrices (768, 2304, 3072, 50257 …), producing all-zeros output. */
-static void mat_transpose_large(const float *m, I r, I c, float *out)
-{
-    I i, j;
-    for (i = 0; i < r; i++)
-        for (j = 0; j < c; j++)
-            out[j * r + i] = m[i * c + j];
-}
-
-/* plain C matmul fallback for dimensions that exceed unsigned char range (>255).
-   r2_maths mat_mul uses unsigned char for dimensions so overflows silently
-   for GPT-2 sized matrices (768, 2304, 3072, 50257 …). */
-static void matmul_large(const float *ma, const float *mb,
-                          I rows, I inner, I cols, float *out)
-{
-    I i, j, k;
-    for (i = 0; i < rows; i++)
-        for (j = 0; j < cols; j++) {
-            float s = 0.f;
-            for (k = 0; k < inner; k++)
-                s += ma[i * inner + k] * mb[k * cols + j];
-            out[i * cols + j] = s;
-        }
-}
 
 /* (matmul A B) / (@ A B) — matrix product */
 static L f_matmul(L t, L e)
@@ -371,14 +345,10 @@ static L f_matmul(L t, L e)
     if (!out_data)
         abort();
 
-    /* r2_maths mat_mul uses unsigned char dims (max 255).
-       Fall back to our own loop for any dimension that exceeds that. */
-    if (r1 > 255 || c1 > 255 || c2 > 255)
-        matmul_large(a->data, b->data, r1, c1, c2, out_data);
-
-    else
-        mat_mul(a->data, b->data, (unsigned char)r1, (unsigned char)c1,
-                (unsigned char)r2, (unsigned char)c2, out_data);
+    mat_mul(a->data, b->data,
+	    (unsigned int)r1, (unsigned int)c1,
+	    (unsigned int)r2, (unsigned int)c2,
+	    out_data);
 
     L result;
     if (a->rank == 1 || b->rank == 1)
@@ -412,7 +382,7 @@ static L f_transpose(L t, L e)
     float *out = malloc(r * c * sizeof(float));
     if (!out)
         abort();
-    mat_transpose_large(a->data, r, c, out);
+    mat_transpose(a->data, r, c, out);
     I sh[2];
     sh[0] = c;
     sh[1] = r;
