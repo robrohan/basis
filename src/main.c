@@ -74,10 +74,12 @@ int main(int argc, char *argv[])
             file = optarg;
             break;
         default:
-            fprintf(stderr, "usage: basis [-f file.lisp]\n");
+            fprintf(stderr, "usage: basis [-f file.lisp] [file.lisp]\n");
             return 1;
         }
     }
+    if (!file && optind < argc)
+        file = argv[optind];
 
     input_stream = stdin;
     init();

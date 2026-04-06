@@ -41,7 +41,7 @@ typedef double   L;
 #define A (char *)cell
 
 /* number of cells for the shared stack and atom heap */
-#define N 0x16000
+#define N 0x22000
 
 // These exist somewhere :)
 /* tensor: rank-N array of floats, backed by r2_maths vecn_* operations */

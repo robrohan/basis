@@ -321,21 +321,6 @@ static L f_tensor_p(L t, L e)
     return T(x) == TENS ? tru : nil;
 }
 
-/* plain C matmul fallback for dimensions that exceed unsigned char range (>255).
-   r2_maths mat_mul uses unsigned char for dimensions so overflows silently
-   for GPT-2 sized matrices (768, 2304, 3072, 50257 …). */
-static void matmul_large(const float *ma, const float *mb,
-                          I rows, I inner, I cols, float *out)
-{
-    I i, j, k;
-    for (i = 0; i < rows; i++)
-        for (j = 0; j < cols; j++) {
-            float s = 0.f;
-            for (k = 0; k < inner; k++)
-                s += ma[i * inner + k] * mb[k * cols + j];
-            out[i * cols + j] = s;
-        }
-}
 
 /* (matmul A B) / (@ A B) — matrix product */
 static L f_matmul(L t, L e)
@@ -360,14 +345,10 @@ static L f_matmul(L t, L e)
     if (!out_data)
         abort();
 
-    /* r2_maths mat_mul uses unsigned char dims (max 255).
-       Fall back to our own loop for any dimension that exceeds that. */
-    if (r1 > 255 || c1 > 255 || c2 > 255)
-        matmul_large(a->data, b->data, r1, c1, c2, out_data);
-
-    else
-        mat_mul(a->data, b->data, (unsigned char)r1, (unsigned char)c1,
-                (unsigned char)r2, (unsigned char)c2, out_data);
+    mat_mul(a->data, b->data,
+	    (unsigned int)r1, (unsigned int)c1,
+	    (unsigned int)r2, (unsigned int)c2,
+	    out_data);
 
     L result;
     if (a->rank == 1 || b->rank == 1)
@@ -401,7 +382,7 @@ static L f_transpose(L t, L e)
     float *out = malloc(r * c * sizeof(float));
     if (!out)
         abort();
-    mat_transpose(a->data, (unsigned char)r, (unsigned char)c, out);
+    mat_transpose(a->data, r, c, out);
     I sh[2];
     sh[0] = c;
     sh[1] = r;
@@ -451,6 +432,21 @@ static L f_exp(L t, L e)
     tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
     for (i = 0; i < a->len; i++)
         out->data[i] = expf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (tanh x) — hyperbolic tangent; scalar or element-wise on tensors.
+   Uses the C standard tanhf() which is numerically stable for all inputs. */
+static L f_tanh(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS)
+        return (L)tanh((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++)
+        out->data[i] = tanhf(a->data[i]);
     return box(TENS, (I)(out - tensor_heap));
 }
 
@@ -514,6 +510,22 @@ static L f_zero(L t, L e)
     sh[0] = n;
     tensor_t *out = alloc_tensor(1, sh, n, NULL);
     vecn_zero(out->data, (int)n);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
+/* (causal-mask n) -> (n x n) lower-triangular mask: 0.0 on/below diagonal, -1e9 above.
+   Added to scores before softmax so future positions get ~zero weight. */
+static L f_causal_mask(L t, L e)
+{
+    I i, j;
+    t = evlis(t, e);
+    I n = (I)(double)car(t);
+    if (n <= 0) return err;
+    I sh[2] = {n, n};
+    tensor_t *out = alloc_tensor(2, sh, n * n, NULL);
+    for (i = 0; i < n; i++)
+        for (j = 0; j < n; j++)
+            out->data[i * n + j] = (j <= i) ? 0.0f : -1e9f;
     return box(TENS, (I)(out - tensor_heap));
 }
 
@@ -915,11 +927,13 @@ void register_tensor_prims(void)
     register_prim("abs",         f_vabs);
     register_prim("sqrt",        f_vsqrt);
     register_prim("exp",         f_exp);
+    register_prim("tanh",        f_tanh);
     register_prim("sin",         f_sin);
     register_prim("cos",         f_cos);
     register_prim("normalize",   f_normalize);
     register_prim("pow",         f_vpow);
     register_prim("zero",        f_zero);
+    register_prim("causal-mask", f_causal_mask);
     register_prim("dot",         f_dot);
     register_prim("length",      f_length);
     register_prim("length2",     f_length2);

@@ -140,8 +140,8 @@ extern "C"
      * r1,c1 = rows and column size of m1
      * r2,c2 = rows and column size of m2
      */
-    static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
-                        unsigned char c2, float *out);
+    static void mat_mul(const float *m1, const float *m2, unsigned int r1, unsigned int c1, unsigned int r2,
+                        unsigned int c2, float *out);
 
     /**
      * Transpose a matrix of arbitrary size. m is row-major with r rows
@@ -150,7 +150,7 @@ extern "C"
      *
      * r,c = rows and columns of m
      */
-    static void mat_transpose(const float *m, unsigned char r, unsigned char c, float *out);
+    static void mat_transpose(const float *m, unsigned int r, unsigned int c, float *out);
 
     /** Multiply two 4x4 matrices, result into out */
     static void mat4_mul(const mat4 *m1, const mat4 *m2, mat4 *out);
@@ -987,8 +987,8 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Generic Matrix Multiply
 
-    static void mat_mul(const float *m1, const float *m2, unsigned char r1, unsigned char c1, unsigned char r2,
-                        unsigned char c2, float *out)
+    static void mat_mul(const float *m1, const float *m2, unsigned int r1, unsigned int c1, unsigned int r2,
+                        unsigned int c2, float *out)
     {
         if (c1 != r2)
         {
@@ -996,7 +996,7 @@ extern "C"
             return;
         }
 
-        unsigned char i, j, k;
+        unsigned int i, j, k;
         for (i = 0; i < r1; i++)
         {
             for (j = 0; j < c2; j++)
@@ -1014,9 +1014,9 @@ extern "C"
     ///////////////////////////////////////////////////////////////
     // Generic Matrix Transpose
 
-    static void mat_transpose(const float *m, unsigned char r, unsigned char c, float *out)
+    static void mat_transpose(const float *m, unsigned int r, unsigned int c, float *out)
     {
-        unsigned char i, j;
+        unsigned int i, j;
         for (i = 0; i < r; i++)
         {
             for (j = 0; j < c; j++)

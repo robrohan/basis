@@ -19,13 +19,9 @@
 					; gelu approx:
 					; 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
 					; tanh(y) = (exp(2y) - 1) / (exp(2y) + 1)
-(define tanh- (lambda (y)
-    (let* (e2y (exp (* 2.0 y)))
-    (/ (- e2y 1.0) (+ e2y 1.0)))))
-
 (define gelu (lambda (x)
     (* (* 0.5 x)
-       (+ 1.0 (tanh- (* 0.7978845608 (+ x (* 0.044715 (* x (* x x))))))))))
+       (+ 1.0 (tanh (* 0.7978845608 (+ x (* 0.044715 (* x (* x x))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Scaled dot-product attention
