@@ -435,6 +435,21 @@ static L f_exp(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
+/* (tanh x) — hyperbolic tangent; scalar or element-wise on tensors.
+   Uses the C standard tanhf() which is numerically stable for all inputs. */
+static L f_tanh(L t, L e)
+{
+    L x = car(evlis(t, e));
+    I i;
+    if (T(x) != TENS)
+        return (L)tanh((double)x);
+    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    for (i = 0; i < a->len; i++)
+        out->data[i] = tanhf(a->data[i]);
+    return box(TENS, (I)(out - tensor_heap));
+}
+
 /* (sin x) — sine; scalar or element-wise on tensors */
 static L f_sin(L t, L e)
 {
@@ -912,6 +927,7 @@ void register_tensor_prims(void)
     register_prim("abs",         f_vabs);
     register_prim("sqrt",        f_vsqrt);
     register_prim("exp",         f_exp);
+    register_prim("tanh",        f_tanh);
     register_prim("sin",         f_sin);
     register_prim("cos",         f_cos);
     register_prim("normalize",   f_normalize);

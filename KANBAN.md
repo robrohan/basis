@@ -6,6 +6,7 @@ kanban-plugin: board
 
 ## 🧊 Backlog
 
+- [ ] tinylisp has no TCO and evlis/eval/apply are deeply mutually recursive — GPT-2 forward pass exhausts the default C stack; fix by adding tail-call trampolining or iterative eval, or at minimum detect stack depth and error gracefully instead of SIGBUS
 - [ ] Add string primitives: (string-length s) using s8.len for rune count, (string-ref s i) for rune at index, (string-append s1 s2) — use S()/free_S() around operations that need rune-aware counting, raw bytes for storage
 - [ ] Add (princ x) primitive following Common Lisp conventions: human-readable output without escapes (for strings, print bytes without surrounding quotes)
 - [ ] Add (defun name (args) "docstring" body) following Emacs Lisp convention: sugar for (define name (lambda (args) body)) with the docstring stored on the binding so (doc name) can retrieve it; depends on string literals being implemented first
