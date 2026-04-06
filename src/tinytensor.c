@@ -321,6 +321,17 @@ static L f_tensor_p(L t, L e)
     return T(x) == TENS ? tru : nil;
 }
 
+/* plain C transpose fallback for dimensions that exceed unsigned char range (>255).
+   r2_maths mat_transpose uses unsigned char for r,c — silently truncates to 0 for
+   GPT-2 sized matrices (768, 2304, 3072, 50257 …), producing all-zeros output. */
+static void mat_transpose_large(const float *m, I r, I c, float *out)
+{
+    I i, j;
+    for (i = 0; i < r; i++)
+        for (j = 0; j < c; j++)
+            out[j * r + i] = m[i * c + j];
+}
+
 /* plain C matmul fallback for dimensions that exceed unsigned char range (>255).
    r2_maths mat_mul uses unsigned char for dimensions so overflows silently
    for GPT-2 sized matrices (768, 2304, 3072, 50257 …). */
@@ -401,7 +412,7 @@ static L f_transpose(L t, L e)
     float *out = malloc(r * c * sizeof(float));
     if (!out)
         abort();
-    mat_transpose(a->data, (unsigned char)r, (unsigned char)c, out);
+    mat_transpose_large(a->data, r, c, out);
     I sh[2];
     sh[0] = c;
     sh[1] = r;

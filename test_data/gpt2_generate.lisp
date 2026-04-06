@@ -37,8 +37,8 @@
     (+ (* (layer-norm x eps) w) b)))
 
 (define embed (lambda (tok pos)
-    (+ (col-slice token_embd.weight tok)
-       (col-slice position_embd.weight pos))))
+    (+ (slice token_embd.weight tok)
+       (slice position_embd.weight pos))))
 
 ;; Extract columns [start, end) from a rank-2 matrix.
 ;; Works by transposing (so rows become cols), slicing rows, transposing back.
@@ -73,17 +73,17 @@
 ;; Multi-head self-attention: splits Q/K/V into n-heads heads of head-dim each,
 ;; runs scaled dot-product attention per head with causal mask, then projects.
 (define gpt2-attn (lambda (x Wqkv bqkv Wo bo)
-    (let* (qkv  (+ (@ x Wqkv) bqkv))
+    (let* (qkv  (+ (@ x (T Wqkv)) bqkv))
     (let* (Q    (col-range qkv 0       n-embd))
     (let* (K    (col-range qkv n-embd  (* 2 n-embd)))
     (let* (V    (col-range qkv (* 2 n-embd) (* 3 n-embd)))
     (let* (seq  (slice (shape x) 0))
     (let* (mask (causal-mask seq))
     (let* (out  (T (head-stack Q K V mask 0)))
-    (+ (@ out Wo) bo))))))))))
+    (+ (@ out (T Wo)) bo))))))))))
 
 (define gpt2-ff (lambda (x Wup bup Wdown bdown)
-    (+ (@ (gelu (+ (@ x Wup) bup)) Wdown) bdown)))
+    (+ (@ (gelu (+ (@ x (T Wup)) bup)) (T Wdown)) bdown)))
 
 (define gpt2-block (lambda (x Wln1 bln1 Wqkv bqkv Wo bo Wln2 bln2 Wup bup Wdown bdown)
     (let* (a  (gpt2-attn (gpt2-ln x Wln1 bln1) Wqkv bqkv Wo bo))
@@ -204,7 +204,7 @@
     (let* (seq    (slice (shape x) 0))
     (let* (last-h (reshape (slice x (- seq 1)) [1 768]))
     (let* (normed (gpt2-ln last-h output_norm.weight output_norm.bias))
-    (let* (logits (@ normed output.weight))
+    (let* (logits (@ normed (T output.weight)))
     (argmax logits))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

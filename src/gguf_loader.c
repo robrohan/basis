@@ -40,13 +40,25 @@ static L f_load_gguf(L t, L e)
             continue;
         }
 
-        /* build basis shape from GGUF dims (stored innermost-first) */
+        /* build basis shape from GGUF dims (stored innermost-first).
+           GGUF 2D tensors: dim[0] is the inner (fastest-varying) axis,
+           dim[1] is the outer (slowest-varying) axis.  The data layout is
+           therefore (dim[1] rows) × (dim[0] cols) in row-major — i.e. the
+           PyTorch weight shape, not its transpose.  We swap the indices so
+           basis stores shape[0]=rows=dim[1], shape[1]=cols=dim[0], making
+           basis's row-major indexing match the actual data layout.
+           1D tensors (biases, norms) are not affected. */
         I rank  = (I)tensor.ndim;
         I len   = (I)tensor.num_weights;
         I shape[MAX_RANK];
         I i;
-        for (i = 0; i < rank; i++)
-            shape[i] = (I)tensor.dim[i];
+        if (rank == 2) {
+            shape[0] = (I)tensor.dim[1];   /* outer dim → rows */
+            shape[1] = (I)tensor.dim[0];   /* inner dim → cols */
+        } else {
+            for (i = 0; i < rank; i++)
+                shape[i] = (I)tensor.dim[i];
+        }
 
         /* allocate tensor in basis heap, then free the temporary float array */
         tensor_t *bt = alloc_tensor(rank, shape, len, data);
