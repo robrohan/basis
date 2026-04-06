@@ -8,8 +8,7 @@
 ;; then generates N_TOKENS new tokens one at a time, printing each
 ;; decoded token as it is produced.
 ;;
-;; Note: uses single-head attention (d_k=768) — correct pipeline,
-;; outputs differ from reference GPT-2.  See cust_gpt2.lisp for details.
+;; Uses 12-head attention (head-dim=64) with causal mask — matches reference GPT-2 attention.
 
 (load "test_data/mod_transformer.lisp")
 
@@ -32,7 +31,7 @@
 (define eps      0.00001)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; GPT-2 building blocks  (same as cust_gpt2.lisp)
+;; GPT-2 building blocks
 
 (define gpt2-ln (lambda (x w b)
     (+ (* (layer-norm x eps) w) b)))
@@ -41,15 +40,47 @@
     (+ (col-slice token_embd.weight tok)
        (col-slice position_embd.weight pos))))
 
+;; Extract columns [start, end) from a rank-2 matrix.
+;; Works by transposing (so rows become cols), slicing rows, transposing back.
+(define col-range (lambda (M start end)
+    (T (slice-range (T M) start end))))
+
+;; Scaled dot-product attention for one head.
+;; Qh, Kh, Vh: (seq x head-dim); mask: (seq x seq) causal mask.
+;; Returns (seq x head-dim).
+(define sdpa (lambda (Qh Kh Vh mask)
+    (let* (sc (+ (/ (@ Qh (T Kh)) (sqrt head-dim)) mask))
+    (@ (softmax sc) Vh))))
+
+;; Compute head h and return it transposed to (head-dim x seq).
+;; Q, K, V: (seq x n-embd); h: head index 0..11.
+(define head-t (lambda (Q K V mask h)
+    (let* (s (* h head-dim))
+    (let* (e (+ s head-dim))
+    (T (sdpa (col-range Q s e)
+             (col-range K s e)
+             (col-range V s e)
+             mask))))))
+
+;; Stack all 12 heads into (n-embd x seq) by vstacking (head-dim x seq) slices,
+;; then the caller transposes to (seq x n-embd).
+(define head-stack (lambda (Q K V mask h)
+    (let* (hout (head-t Q K V mask h))
+    (cond
+        ((< h 11) (vstack hout (head-stack Q K V mask (+ h 1))))
+        (#t hout)))))
+
+;; Multi-head self-attention: splits Q/K/V into n-heads heads of head-dim each,
+;; runs scaled dot-product attention per head with causal mask, then projects.
 (define gpt2-attn (lambda (x Wqkv bqkv Wo bo)
     (let* (qkv  (+ (@ x Wqkv) bqkv))
-    (let* (qkvT (T qkv))
-    (let* (Q    (T (slice-range qkvT 0    768)))
-    (let* (K    (T (slice-range qkvT 768  1536)))
-    (let* (V    (T (slice-range qkvT 1536 2304)))
-    (let* (sc   (/ (@ Q (T K)) (sqrt n-embd)))
-    (let* (attn (@ (softmax sc) V))
-    (+ (@ attn Wo) bo))))))))))
+    (let* (Q    (col-range qkv 0       n-embd))
+    (let* (K    (col-range qkv n-embd  (* 2 n-embd)))
+    (let* (V    (col-range qkv (* 2 n-embd) (* 3 n-embd)))
+    (let* (seq  (slice (shape x) 0))
+    (let* (mask (causal-mask seq))
+    (let* (out  (T (head-stack Q K V mask 0)))
+    (+ (@ out Wo) bo))))))))))
 
 (define gpt2-ff (lambda (x Wup bup Wdown bdown)
     (+ (@ (gelu (+ (@ x Wup) bup)) Wdown) bdown)))
@@ -165,30 +196,42 @@
     x))))))))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; One forward pass: token list -> next token ID (scalar).
-;; All intermediate tensors are local to this function so
-;; they become unreachable (and GC-collectable) on return.
+;; One forward pass: embedding matrix -> next token ID (scalar).
+;; Takes (seq x 768) directly so the caller controls context accumulation.
 
-(define gpt2-next (lambda (tok-list)
-    (let* (x      (build-input tok-list))
+(define gpt2-forward (lambda (x)
     (let* (x      (run-blocks x))
     (let* (seq    (slice (shape x) 0))
     (let* (last-h (reshape (slice x (- seq 1)) [1 768]))
     (let* (normed (gpt2-ln last-h output_norm.weight output_norm.bias))
     (let* (logits (@ normed output.weight))
-    (argmax logits)))))))))
+    (argmax logits))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; List utilities
+;; Autoregressive generation loop.
+;;
+;; context is a global (seq x 768) tensor updated with set! before each gc().
+;; This is intentional: gc() resets the Lisp cell stack to the global env,
+;; which would corrupt any cons-list passed as a local variable.  Storing
+;; context as a global TENS means gc_tensors() keeps it alive while freeing
+;; all the per-block intermediates from gpt2-forward.
+;;
+;; n and pos are plain scalars — safe to read from the (now-freed) let* cells
+;; before any new allocation overwrites them, which is all we need.
 
-; Append a single item to the end of a list.
-(define append-tok (lambda (lst tok)
+(define generate (lambda (n pos)
     (cond
-        ((eq? lst ()) (cons tok ()))
-        (#t (cons (car lst) (append-tok (cdr lst) tok))))))
+        ((< 0 n)
+         (let* (next (gpt2-forward context))
+         (let* (_    (print (token->str next)))
+         (let* (_    (set! context (vstack context (reshape (embed next pos) [1 768]))))
+         (let* (_    (gc))
+         (generate (- n 1) (+ pos 1)))))))
+        (#t ()))))
 
-; Convert a rank-1 tensor to a Lisp list of scalars.
-; Uses (< i n) to avoid off-by-one with float equality.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Convert a rank-1 tensor to a Lisp list of scalars (needed by build-input).
+
 (define t2l-loop (lambda (t i n)
     (cond
         ((< i n) (cons (slice t i) (t2l-loop t (+ i 1) n)))
@@ -196,21 +239,6 @@
 
 (define tensor->list (lambda (t)
     (t2l-loop t 0 (slice (shape t) 0))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Autoregressive generation loop.
-;; Prints each new token as it is produced.
-;; Uses nested let* to sequence print → gc → recurse
-;; (tinylisp let* bodies are single expressions).
-
-(define generate (lambda (tok-list n)
-    (cond
-        ((eq? n 0) ())
-        (#t
-         (let* (next  (gpt2-next tok-list))
-         (let* (s     (print (token->str next)))
-         (let* (dummy (gc))
-         (generate (append-tok tok-list next) (- n 1)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Entry point
@@ -225,8 +253,9 @@
 (print "token ids:")
 (print start-toks)
 
-(define start-list (tensor->list start-toks))
+;; Build initial (seq x 768) context from prompt tokens, store as global.
+(define context (build-input (tensor->list start-toks)))
 
 (print "--- generation ---")
-(generate start-list N_TOKENS)
+(generate N_TOKENS (slice (shape context) 0))
 (print "--- done ---")

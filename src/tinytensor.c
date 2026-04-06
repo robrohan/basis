@@ -517,6 +517,22 @@ static L f_zero(L t, L e)
     return box(TENS, (I)(out - tensor_heap));
 }
 
+/* (causal-mask n) -> (n x n) lower-triangular mask: 0.0 on/below diagonal, -1e9 above.
+   Added to scores before softmax so future positions get ~zero weight. */
+static L f_causal_mask(L t, L e)
+{
+    I i, j;
+    t = evlis(t, e);
+    I n = (I)(double)car(t);
+    if (n <= 0) return err;
+    I sh[2] = {n, n};
+    tensor_t *out = alloc_tensor(2, sh, n * n, NULL);
+    for (i = 0; i < n; i++)
+        for (j = 0; j < n; j++)
+            out->data[i * n + j] = (j <= i) ? 0.0f : -1e9f;
+    return box(TENS, (I)(out - tensor_heap));
+}
+
 /* (dot v1 v2) — dot product → scalar; vec2/vec4 fast paths */
 static L f_dot(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dot, vec4_dot, vecn_dot)}
 
@@ -920,6 +936,7 @@ void register_tensor_prims(void)
     register_prim("normalize",   f_normalize);
     register_prim("pow",         f_vpow);
     register_prim("zero",        f_zero);
+    register_prim("causal-mask", f_causal_mask);
     register_prim("dot",         f_dot);
     register_prim("length",      f_length);
     register_prim("length2",     f_length2);

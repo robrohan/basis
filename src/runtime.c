@@ -119,6 +119,7 @@ static L f_gc(L t, L e)
     return nil;
 }
 
+
 /* (load file.lisp) — evaluate all expressions in a file, then return ()
    The filename is an unquoted atom: (load test_data/assert.lisp)
    Swaps input_stream so nested loads and REPL resumption both work correctly. */
