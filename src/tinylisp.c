@@ -357,11 +357,22 @@ int get(void)
 char scan(void)
 {
     I i = 0;
-    while (seeing(' ') || seeing(';'))
+    while (seeing(' ') || seeing(';') || seeing('#'))
     {
         if (seeing(';'))
             while (see >= 0 && !seeing('\n')) /* skip to end of line */
                 look();
+        else if (seeing('#'))
+        {
+            look(); /* consume '#', peek at next char */
+            if (see == '!')  /* shebang line — skip to end of line */
+                while (see >= 0 && !seeing('\n'))
+                    look();
+            else
+            {
+                buf[0] = '#'; buf[1] = 0; return *buf; /* '#t' etc — let atomic() handle it */
+            }
+        }
         else
             look();
     }
