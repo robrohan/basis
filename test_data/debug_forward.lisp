@@ -1,4 +1,6 @@
+
 (load "test_data/mod_transformer.lisp")
+
 (load-gguf "models/gpt2.Q4_0.gguf")
 (load-gguf-vocab "models/gpt2.Q4_0.gguf")
 
@@ -10,14 +12,18 @@
 (define eps      0.00001)
 
 (define gpt2-ln (lambda (x w b) (+ (* (layer-norm x eps) w) b)))
+
 (define embed (lambda (tok pos)
     (+ (slice token_embd.weight tok)
        (slice position_embd.weight pos))))
+
 (define col-range (lambda (M start end)
     (T (slice-range (T M) start end))))
+
 (define sdpa (lambda (Qh Kh Vh mask)
     (let* (sc (+ (/ (@ Qh (T Kh)) (sqrt head-dim)) mask))
     (@ (softmax sc) Vh))))
+
 (define head-t (lambda (Q K V mask h)
     (let* (s (* h head-dim))
     (let* (e (+ s head-dim))
@@ -25,11 +31,13 @@
              (col-range K s e)
              (col-range V s e)
              mask))))))
+
 (define head-stack (lambda (Q K V mask h)
     (let* (hout (head-t Q K V mask h))
     (cond
         ((< h 11) (vstack hout (head-stack Q K V mask (+ h 1))))
         (#t hout)))))
+
 (define gpt2-attn (lambda (x Wqkv bqkv Wo bo)
     (let* (qkv  (+ (@ x (T Wqkv)) bqkv))
     (let* (Q    (col-range qkv 0       n-embd))
@@ -39,13 +47,16 @@
     (let* (mask (causal-mask seq))
     (let* (out  (T (head-stack Q K V mask 0)))
     (+ (@ out (T Wo)) bo))))))))))
+
 (define gpt2-ff (lambda (x Wup bup Wdown bdown)
     (+ (@ (gelu (+ (@ x (T Wup)) bup)) (T Wdown)) bdown)))
+
 (define gpt2-block (lambda (x Wln1 bln1 Wqkv bqkv Wo bo Wln2 bln2 Wup bup Wdown bdown)
     (let* (a  (gpt2-attn (gpt2-ln x Wln1 bln1) Wqkv bqkv Wo bo))
     (let* (x1 (+ x a))
     (let* (f  (gpt2-ff (gpt2-ln x1 Wln2 bln2) Wup bup Wdown bdown))
     (+ x1 f))))))
+
 (define gpt2-forward (lambda (x)
     (let* (x      (run-blocks x))
     (let* (seq    (slice (shape x) 0))

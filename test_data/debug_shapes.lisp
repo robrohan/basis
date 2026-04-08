@@ -1,5 +1,7 @@
+
 (load-gguf "models/gpt2.Q4_0.gguf")
 (load-gguf-vocab "models/gpt2.Q4_0.gguf")
+
 (print "token_embd.weight:") (print (shape token_embd.weight))
 (print "position_embd.weight:") (print (shape position_embd.weight))
 (print "blk.0.attn_qkv.weight:") (print (shape blk.0.attn_qkv.weight))
