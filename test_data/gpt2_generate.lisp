@@ -92,18 +92,19 @@
     (+ x1 f))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Build (seq x 768) embedding matrix from a Lisp list of token IDs.
+;; Build (seq x 768) embedding matrix from a rank-1 token-ID tensor.
 ;; Uses vstack to accumulate one row per token.
 
-(define build-input-loop (lambda (toks pos acc)
+(define build-input-loop (lambda (toks pos n acc)
     (cond
-        ((equal toks ()) acc)
-        (#t (build-input-loop (cdr toks) (+ pos 1)
-                (vstack acc (reshape (embed (car toks) pos) [1 768])))))))
+        ((< pos n) (build-input-loop toks (+ pos 1) n
+                    (vstack acc (reshape (embed (slice toks pos) pos) [1 768]))))
+        (#t acc))))
 
-(define build-input (lambda (tok-list)
-    (build-input-loop (cdr tok-list) 1
-        (reshape (embed (car tok-list) 0) [1 768]))))
+(define build-input (lambda (tok-tensor)
+    (let* (n (slice (shape tok-tensor) 0))
+    (build-input-loop tok-tensor 1 n
+        (reshape (embed (slice tok-tensor 0) 0) [1 768])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Run all 12 transformer blocks on (seq x 768) hidden states.
@@ -230,21 +231,10 @@
         (#t ()))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Convert a rank-1 tensor to a Lisp list of scalars (needed by build-input).
-
-(define t2l-loop (lambda (t i n)
-    (cond
-        ((< i n) (cons (slice t i) (t2l-loop t (+ i 1) n)))
-        (#t ()))))
-
-(define tensor->list (lambda (t)
-    (t2l-loop t 0 (slice (shape t) 0))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Entry point
 
 (define N_TOKENS 10)
-(define prompt "once upon a time ")
+(define prompt "once upon a time")
 
 (print "--- prompt ---")
 (print prompt)
@@ -254,7 +244,7 @@
 (print start-toks)
 
 ;; Build initial (seq x 768) context from prompt tokens, store as global.
-(define context (build-input (tensor->list start-toks)))
+(define context (build-input start-toks))
 
 (print "--- generation ---")
 (generate N_TOKENS (slice (shape context) 0))
