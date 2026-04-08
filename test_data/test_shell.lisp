@@ -1,19 +1,18 @@
 #!/usr/bin/env basis
 
-(define x "Hello World")
+(define x "Doing a loop")
 (print x)
 
-(define inner-loop (lambda (itr) (print itr)))
+(defun inner-loop (itr) (print itr))
 
-(define main-loop (lambda (n)
-		    (if (< 0 n)
-			(let*
-  			  (print (inner-loop n))
-			  (main-loop (- n 1))
-			  )
-			()
-		    )))
+(defun main-loop (n)
+  (if (< 0 n)
+      (let*
+  	(_ (inner-loop n))       ; let* always has to set to something
+	(main-loop (- n 1))      ; unless tail?
+	)
+      (print "Done")
+      ))
 
 (main-loop 10)
-
 

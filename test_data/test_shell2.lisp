@@ -57,26 +57,26 @@
 (print (kb-query '(?x is-a foundation) kb))
 
 
-; (print "❓")				; what things are is-a animal?
-; (print (kb-query '(?x is-a animal) kb))
+(print "❓")				; what things are is-a animal?
+(print (kb-query '(?x is-a animal) kb))
 
 
-; (print "🐈")				; what does a cat have?
-; (print (kb-get 'cat 'has kb))
+(print "🐈")				; what does a cat have?
+(print (kb-get 'cat 'has kb))
 
 
-; (print "🐈📦")				; get a tensor property
-; (print (kb-get 'cat 'bbox kb))
+(print "🐈📦")				; get a tensor property
+(print (kb-get 'cat 'bbox kb))
 
 
 					
-; (print "🐈->🌏")			; transitive inference: what is cat?
-; (print (kb-infer 'cat 'is-a kb))
+(print "🐈->🌏")			; transitive inference: what is cat?
+(print (kb-infer 'cat 'is-a kb))
 
 
 					; retract fur and verify only legs remains
 ; (define kb (kb-retract '(cat has fur) kb))
-; (print (kb-get 'cat 'has kb))
+(print (kb-get 'cat 'has kb))
 
-; (print (kb-get 'earth 'mass kb))
+(print (kb-get 'earth 'mass kb))
 
