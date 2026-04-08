@@ -98,9 +98,10 @@ static L f_print(L t, L e)
     return x;
 }
 
-/* (eq? a b) — full equality: tensors compare rank+shape+elements, strings and
+/* (equal a b) — full equality: tensors compare rank+shape+elements, strings and
    atoms compare by interned address, numbers compare by value, everything else
-   bitwise. Defined here rather than in tinylisp.c so it can see both heaps. */
+   bitwise. CL `equal` does structural/deep equality. Defined here rather than
+   in tinylisp.c so it can see both heaps. */
 static L f_eq(L t, L e)
 {
     t = evlis(t, e);
@@ -155,7 +156,7 @@ static L f_load(L t, L e)
 
 void register_runtime_prims(void)
 {
-    register_prim("eq?",   f_eq);
+    register_prim("equal", f_eq);
     register_prim("print", f_print);
     register_prim("gc",    f_gc);
     register_prim("load",  f_load);

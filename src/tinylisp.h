@@ -12,7 +12,7 @@
 #define MAX_TENSORS  0x2000 /* max live tensors */
 #define MAX_RANK     0x08   /* max tensor dimensions */
 
-#define CORE_PRIM_COUNT 19  /* number of built-in core primitives (for test resets) */
+#define CORE_PRIM_COUNT 21  /* number of built-in core primitives (for test resets) */
 
 /* we only need two types to implement a Lisp interpreter:
         I    32-bit unsigned integer for tags, ordinals, heap/stack indices
@@ -97,6 +97,7 @@ L f_leta(L t, L e);
 L f_lambda(L t, L e);
 L f_define(L t, L e);
 L f_set(L t, L e);
+L f_defun(L t, L e);
 
 /////////////////////////////////////
 

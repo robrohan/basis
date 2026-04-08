@@ -69,14 +69,14 @@
 		      (dz1 (* dh1 (step z1)))
 					; W2 -= lr * dW2
 					;   gradient descent step for output weights
-		      (_ (set! W2 (- W2 (* lr dW2))))
+		      (_ (setq W2 (- W2 (* lr dW2))))
 					; b1 -= lr * dz1
 					;   gradient descent step for hidden biases
-		      (_ (set! b1 (- b1 (* lr dz1))))
+		      (_ (setq b1 (- b1 (* lr dz1))))
 					; W1 -= lr * outer(dz1, x)
 					;   gradient descent step for input weights: outer2 builds the 2x2
 					;   gradient matrix
-		      (set! W1 (- W1 (* lr (outer2 dz1 x))))
+		      (setq W1 (- W1 (* lr (outer2 dz1 x))))
 		      )
 		    ))
 
