@@ -11,11 +11,11 @@ Date: 2026-04-01
 
 #### 1.1 Assumptions
 
-Basis is a Lisp-like language where tensors (scalars, vectors, matrices, and higher-dimensional arrays) are the fundamental data structure, replacing the cons cell / linked list of traditional Lisp.
+Basis is a Lisp-like language where tensors (scalars, vectors, matrices, and higher-dimensional arrays) are a fundamental building block of the language and a first class data structure.
 
-Traditional Lisp is built on a single primitive: the cons pair. Everything, code and data alike, is a tree of cons cells. Basis keeps that uniformity (homoiconicity) but tries to replace the cons pair with a tensor, making multi-dimensional numeric data a first-class citizen rather than a library concern.
+Traditional Lisp is built on a single primitive: the cons pair. Everything, code and data alike, is a tree of cons cells. Basis keeps that uniformity (homoiconicity) but tries to enhance the cons pair with tensors, making multi-dimensional numeric data a first-class citizen rather than a library concern.
 
-The core assumption is that homoiconicity can be preserved with tensors as the base type. In standard Lisp, code is data because both are lists:
+The core assumption is that homoiconicity can be preserved with tensors as a base type. In standard Lisp, code is data because both are lists:
 
 ```lisp
 '(+ 1 2)   ; a list that is also an expression
@@ -39,10 +39,13 @@ The operator is the head element, the argument tensor follows. Structure and com
 
 #### 1.3 System Environment
 
-Basis is built on two vendored single-header libraries:
+Basis is built on several vendored libraries (often single-header):
 
+- **`vendor/r2_unit.h`** - provides a simple unit testing framework for the C code.
 - **`vendor/r2_maths.h`** — provides `vec2`, `vec4`, and `vecn_*` / `mat_*` operations over flat `float*` arrays. Tensor arithmetic dispatches to vec2/vec4 fast paths for common small sizes and falls back to generic `vecn_*` loop functions for all other sizes.
 - **`vendor/r2_strings.h`** — provides UTF-8 utilities (`utf8_len`, `str_to_utf8`, `s8` / `rune` types). The scanner uses `utf8_len` to correctly tokenize multi-byte atoms (emoji, Unicode symbols). String type support will use `s8`/`rune` for character-aware operations.
+- **`vendor/gguf/*`** - provides code to read models saved in the _GGUF_ file format.
+- **`src/tinylisp.c`** - the base of the lisp interpreter. Taken from the project of the same name (modified).
 
 The interpreter targets POSIX platforms (macOS, Linux). File mode uses `dup2` to redirect stdin to the input file. The REPL uses `getchar` directly.
 
@@ -82,17 +85,17 @@ A tensor literal in code is self-evaluating, just like a number. An expression `
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                   cell[N]                        │
-│                                                  │
-│  [0 .. hp)        atom strings (C strings)       │
-│  [hp .. sp<<3)    free                           │
-│  [sp .. N)        cons stack (grows downward)    │
+│                   cell[N]                       │
+│                                                 │
+│  [0 .. hp)        atom strings (C strings)      │
+│  [hp .. sp<<3)    free                          │
+│  [sp .. N)        cons stack (grows downward)   │
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
-│              tensor_heap[MAX_TENSORS]            │
-│  [0 .. th)        live tensor_t structs          │
-│  each tensor_t    → malloc'd float* data array   │
+│              tensor_heap[MAX_TENSORS]           │
+│  [0 .. th)        live tensor_t structs         │
+│  each tensor_t   -> malloc'd float* data array  │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -142,8 +145,6 @@ open file -> dup2 onto stdin
     -> fclose
 ```
 
-*(gc() is not currently called between file expressions — see constraints / known issues.)*
-
 #### 2.5 Deployment Diagrams
 
 Basis is a single statically-linked CLI binary. No runtime dependencies beyond libc/libm.
@@ -151,6 +152,7 @@ Basis is a single statically-linked CLI binary. No runtime dependencies beyond l
 ```
 source (*.lisp)
     -> basis -f file.lisp    file mode: evaluate all expressions
+    -> basis file.lisp       file mode: evaluate all expressions
     -> basis                 REPL mode: interactive read-eval-print loop
 ```
 
@@ -178,10 +180,9 @@ scalar  op scalar   plain double arithmetic
 
 Matrix multiply (`@` / `matmul`) is always a distinct operation and does not broadcast.
 
-
 ## 3. User Interface Design
 
-Basis has no graphical interface. The user interface is the language syntax itself.
+Currently, basis has no graphical interface. The user interface is the language syntax itself and the REPL.
 
 ### Syntax
 
@@ -200,7 +201,7 @@ Nesting depth determines rank. Elements inside `[...]` are evaluated at runtime,
 
 ```lisp
 (define x 3)
-[(+ x 1) x]   ; => [4 3]
+[(+ x 1) x]              ; => [4 3]
 ```
 
 #### String Literals
@@ -212,9 +213,9 @@ Strings are written with double quotes. They are self-evaluating and stored as r
 (print "hello world")  ; prints: hello world
 ```
 
-Strings can be passed to primitives that accept path arguments (`load`, `load-gguf`, `load-gguf-vocab`) or printed directly. The `print` primitive outputs raw bytes without surrounding quotes; displayed strings render correctly on UTF-8 terminals.
+Strings can be passed to primitives that accept path arguments (`load`, `load-gguf`, `load-gguf-vocab`) or printed directly. The `print` primitive outputs raw bytes without surrounding quotes; displayed strings should render correctly on UTF-8 terminals.
 
-Rune-aware string operations (`string-length`, `string-ref`, `string-append`) are planned but not yet implemented.
+Rune-aware (UTF-8 aware) string operations (`string-length`, `string-ref`, `string-append`) are planned but not yet implemented.
 
 #### Expression Syntax
 
@@ -227,7 +228,7 @@ An expression is a parenthesised sequence: the first element is the operator, th
 Expressions evaluate inside-out:
 
 ```lisp
-(+ 1 2 (* 3 4))   ; (* 3 4) → 12, then (+ 1 2 12) → 15
+(+ 1 2 (* 3 4))   ; (* 3 4) -> 12, then (+ 1 2 12) -> 15
 ```
 
 #### Comments
@@ -258,20 +259,20 @@ See [docs/primitives.md](primitives.md) for the full reference. The sections bel
 
 #### Tensor Constructors and Inspection
 
-| Primitive           | Description                                                                      |
-|---------------------|----------------------------------------------------------------------------------|
-| `(zero n)`          | Rank-1 zero tensor of length n                                                   |
-| `(make-tensor n v)` | Rank-1 tensor of n elements filled with value v                                  |
-| `(shape t)`         | Returns the shape as a vector, e.g. `[2 3]`                                      |
-| `(rank t)`          | Returns the number of dimensions. Returns 0 for plain numbers (scalars).         |
-| `(slice t i)`       | Element or sub-tensor at index `i` along axis 0                                  |
-| `(slice-range t s e)` | Sub-tensor of rows `[s, e)` along axis 0                                       |
-| `(col-slice M i)`   | Extract column `i` as a rank-1 vector (used for embedding lookup)                |
-| `(head t)`          | First element along axis 0                                                       |
-| `(tail t)`          | All elements after the first                                                     |
-| `(reshape t shape)` | Change shape without moving data; new shape given as a tensor                    |
-| `(vstack A B)`      | Stack two tensors row-wise; rank-1 inputs treated as single rows                 |
-| `(tensor? x)`       | Returns `#t` if x is a tensor                                                    |
+| Primitive             | Description                                                              |
+|-----------------------|--------------------------------------------------------------------------|
+| `(zero n)`            | Rank-1 zero tensor of length n                                           |
+| `(make-tensor n v)`   | Rank-1 tensor of n elements filled with value v                          |
+| `(shape t)`           | Returns the shape as a vector, e.g. `[2 3]`                              |
+| `(rank t)`            | Returns the number of dimensions. Returns 0 for plain numbers (scalars). |
+| `(slice t i)`         | Element or sub-tensor at index `i` along axis 0                          |
+| `(slice-range t s e)` | Sub-tensor of rows `[s, e)` along axis 0                                 |
+| `(col-slice M i)`     | Extract column `i` as a rank-1 vector (used for embedding lookup)        |
+| `(head t)`            | First element along axis 0                                               |
+| `(tail t)`            | All elements after the first                                             |
+| `(reshape t shape)`   | Change shape without moving data; new shape given as a tensor            |
+| `(vstack A B)`        | Stack two tensors row-wise; rank-1 inputs treated as single rows         |
+| `(tensor? x)`         | Returns `#t` if x is a tensor                                            |
 
 #### Arithmetic Primitives
 
@@ -295,7 +296,7 @@ Matrix multiplication and transpose are distinct primitives:
 Element-wise and reduction operations over tensors:
 
 ```lisp
-(dot [1 2 3] [4 5 6])      ; => 32
+(dot [1 2 3] [4 5 6])       ; => 32
 (normalize [3 4])           ; => [0.6 0.8]
 (sum [1 2 3 4])             ; => 10
 (argmax [0.1 0.7 0.2])      ; => 1
@@ -303,7 +304,7 @@ Element-wise and reduction operations over tensors:
 (layer-norm x eps)          ; subtract mean, divide by std
 ```
 
-See primitives.md for the full list (`abs`, `sqrt`, `pow`, `exp`, `log`, `sin`, `cos`, `length`, `length2`, `dist`, `dist2`, `amax`).
+See [docs/primitives.md](primitives.md) for the full reference.
 
 #### Symbolic
 
@@ -318,27 +319,27 @@ See primitives.md for the full list (`abs`, `sqrt`, `pow`, `exp`, `log`, `sin`, 
 
 `define` creates a new binding in the global environment. Calling it a second time with the same name does not update the existing binding; it prepends a shadow binding that hides the old one. This is fine for one-off definitions but causes unbounded environment growth in loops.
 
-`set!` is the explicit mutation primitive. It walks the environment, finds the first binding for the given name, and updates its value in place. It returns the new value and errors if the name is not already bound.
+`setq` is the explicit mutation primitive. It walks the environment, finds the first binding for the given name, and updates its value in place. It returns the new value and errors if the name is not already bound.
 
 ```lisp
 (define x 1)
-(set! x 42)     ; x is now 42, env is unchanged in length
+(setq x 42)     ; x is now 42, env is unchanged in length
 x               ; => 42
 
-(set! y 1)      ; => ERR, y was not defined
+(setq y 1)      ; => ERR, y was not defined
 ```
 
-The convention is: use `define` for the initial binding, use `set!` for all subsequent updates. This keeps intent explicit and prevents silent environment growth in training loops or iteration.
+The convention is: use `define` for the initial binding, use `setq` for all subsequent updates. This keeps intent explicit and prevents silent environment growth in training loops or iteration.
 
-**`set!` with lists:** `set!` performs an in-place pointer update. Assigning a list value (e.g. a cons chain) can confuse the GC because the old cons cells stay live. Use `define` for list variables and reserve `set!` for scalars and tensors.
+**`setq` with lists:** `setq` performs an in-place pointer update. Assigning a list value (e.g. a cons chain) can confuse the GC because the old cons cells stay live. Use `define` for list variables and reserve `setq` for scalars and tensors.
 
 #### Kept from tinylisp
 
 ```
-eval, quote, if, cond, let*, lambda, define, def, set!, and, or, not, eq?, <, >
+eval, quote, if, cond, let*, lambda, define, and, or, not, equal, <, >
 ```
 
-These work unchanged. `cons` / `car` / `cdr` / `pair?` remain available but only operate on cons cells (s-expressions), not tensors.
+These work unchanged. `cons` / `car` / `cdr` remain available but only operate on cons cells (s-expressions), not tensors.
 
 **`let*` single-body constraint:** each `let*` form takes exactly one body expression. To sequence multiple effects (print, then gc, then recurse), chain nested `let*` forms with dummy bindings:
 
@@ -412,19 +413,19 @@ See also:
 
 #### 4.1 Definitions and Abbreviations
 
-| Term         | Definition                                                                 |
-|--------------|----------------------------------------------------------------------------|
-| NaN-boxing   | Encoding type tags and ordinals inside the payload bits of IEEE 754 NaN doubles |
-| Ordinal      | The low 32 bits of a NaN-boxed value; used as a heap or table index        |
-| Homoiconicity| Property where code and data share the same representation                 |
-| Rank         | The number of dimensions of a tensor (scalar=0, vector=1, matrix=2, ...)   |
-| Shape        | A vector of the sizes along each dimension, e.g. `[2 3]` for a 2×3 matrix |
-| REPL         | Read-Eval-Print Loop — interactive interpreter mode                        |
-| `hp`         | Heap pointer — top of the atom string heap (grows upward)                  |
-| `sp`         | Stack pointer — top of the cons cell stack (grows downward from N)         |
-| `th`         | Tensor heap pointer — next free slot in `tensor_heap[]`                    |
-| `env`        | The global environment — a linked list of `(name . value)` pairs           |
-| Primitive    | A built-in function implemented in C and registered in the `prim[]` table  |
+| Term          | Definition                                                                      |
+|---------------|---------------------------------------------------------------------------------|
+| NaN-boxing    | Encoding type tags and ordinals inside the payload bits of IEEE 754 NaN doubles |
+| Ordinal       | The low 32 bits of a NaN-boxed value; used as a heap or table index             |
+| Homoiconicity | Property where code and data share the same representation                      |
+| Rank          | The number of dimensions of a tensor (scalar=0, vector=1, matrix=2, ...)        |
+| Shape         | A vector of the sizes along each dimension, e.g. `[2 3]` for a 2×3 matrix       |
+| REPL          | Read-Eval-Print Loop — interactive interpreter mode                             |
+| `hp`          | Heap pointer — top of the atom string heap (grows upward)                       |
+| `sp`          | Stack pointer — top of the cons cell stack (grows downward from N)              |
+| `th`          | Tensor heap pointer — next free slot in `tensor_heap[]`                         |
+| `env`         | The global environment — a linked list of `(name . value)` pairs                |
+| Primitive     | A built-in function implemented in C and registered in the `prim[]` table       |
 
 #### 4.2 References
 
