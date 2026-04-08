@@ -97,7 +97,7 @@
 
 (define build-input-loop (lambda (toks pos acc)
     (cond
-        ((eq? toks ()) acc)
+        ((equal toks ()) acc)
         (#t (build-input-loop (cdr toks) (+ pos 1)
                 (vstack acc (reshape (embed (car toks) pos) [1 768])))))))
 
@@ -224,7 +224,7 @@
         ((< 0 n)
          (let* (next (gpt2-forward context))
          (let* (_    (print (token->str next)))
-         (let* (_    (set! context (vstack context (reshape (embed next pos) [1 768]))))
+         (let* (_    (setq context (vstack context (reshape (embed next pos) [1 768]))))
          (let* (_    (gc))
          (generate (- n 1) (+ pos 1)))))))
         (#t ()))))

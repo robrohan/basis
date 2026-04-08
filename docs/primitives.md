@@ -9,19 +9,21 @@
 | `cons` | `(cons 1 2)` | Construct a pair |
 | `car` | `(car p)` | First element of pair |
 | `cdr` | `(cdr p)` | Second element of pair |
-| `eq?` | `(eq? x y)` | Structural equality |
-| `pair?` | `(pair? x)` | True if x is a cons pair |
+| `equal` | `(equal x y)` | Structural equality: tensors compare element-wise, atoms by identity, numbers by value |
+| `consp` | `(consp x)` | True if x is a cons pair (non-empty list) |
 | `if` | `(if c t f)` | Conditional |
 | `cond` | `(cond (c1 e1) (c2 e2))` | Multi-branch conditional |
 | `and` | `(and x y)` | Logical and |
 | `or` | `(or x y)` | Logical or |
 | `not` | `(not x)` | Logical not |
 | `lambda` | `(lambda (x) (* x x))` | Anonymous function |
-| `define` | `(define sq (lambda (x) (* x x)))` | Create a new binding in the environment |
-| `def` | `(def sq (lambda (x) (* x x)))` | Alias for `define` |
-| `set!` | `(set! x 42)` | Update an existing binding in place; error if unbound |
+| `define` | `(define sq (lambda (x) (* x x)))` | Create a new binding in the environment (kept for backward compat) |
+| `defparameter` | `(defparameter pi 3.14159)` | Define a global variable (CL style) |
+| `defvar` | `(defvar count 0)` | Define a global variable (CL style) |
+| `defun` | `(defun sq (x) (* x x))` | Define a named function (CL style) |
+| `setq` | `(setq x 42)` | Update an existing binding in place; error if unbound (CL setq) |
 | `let*` | `(let* (x 1) (y 2) (+ x y))` | Sequential local bindings |
-| `int` | `(int 3.9)` | Truncate to integer |
+| `truncate` | `(truncate 3.9)` | Truncate to integer part (CL truncate) |
 | `<` | `(< 1 2)` | Less than |
 | `>` | `(> 2 1)` | Greater than |
 | `gc` | `(gc)` | Force a garbage collection cycle |
@@ -48,11 +50,11 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 | `slice` | `(slice [10 20 30] 1)` | `20` | Element or row at index i along axis 0 |
 | `slice-range` | `(slice-range M 2 5)` | `[row2 row3 row4]` | Sub-matrix of rows [start, end) along axis 0 |
 | `col-slice` | `(col-slice M i)` | row vector | Extract column i as a rank-1 vector (used for embedding lookup) |
-| `head` | `(head [10 20 30])` | `10` | First element or row |
-| `tail` | `(tail [10 20 30])` | `[20 30]` | All elements after the first |
+| `first` | `(first [10 20 30])` | `10` | First element or row |
+| `rest` | `(rest [10 20 30])` | `[20 30]` | All elements after the first |
 | `reshape` | `(reshape [1 2 3 4] [2 2])` | `[[1 2][3 4]]` | Change shape without moving data; new shape given as tensor |
 | `vstack` | `(vstack A B)` | matrix | Stack two tensors row-wise; rank-1 inputs treated as single rows |
-| `tensor?` | `(tensor? [1 2])` | `#t` | True if x is a tensor |
+| `tensorp` | `(tensorp [1 2])` | `#t` | True if x is a tensor |
 
 ## Matrix Operations
 
@@ -66,19 +68,26 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 | Primitive | Example | Result | Description |
 |---|---|---|---|
 | `dot` | `(dot [1 2 3] [4 5 6])` | `32` | Dot product → scalar |
-| `length` | `(length [3 4])` | `5` | Euclidean length → scalar |
-| `length2` | `(length2 [3 4])` | `25` | Length squared → scalar |
+| `norm` | `(norm [3 4])` | `5` | Euclidean norm (length) → scalar |
+| `norm2` | `(norm2 [3 4])` | `25` | Norm squared (length squared) → scalar |
 | `dist` | `(dist [0 0] [3 4])` | `5` | Distance between two points → scalar |
 | `dist2` | `(dist2 [0 0] [3 4])` | `25` | Distance squared → scalar |
 | `normalize` | `(normalize [3 4])` | `[0.6 0.8]` | Scale to unit length |
 | `abs` | `(abs [-3 1 -2])` | `[3 1 2]` | Element-wise absolute value |
 | `sqrt` | `(sqrt [4 9 16])` | `[2 3 4]` | Element-wise square root |
 | `pow` | `(pow [2 3 4] 2)` | `[4 9 16]` | Element-wise power |
-| `vec=` | `(vec= [1 2] [1 2])` | `#t` | Element-wise equality |
+| `equalp` | `(equalp [1 2] [1 2])` | `#t` | Element-wise equality (CL equalp for arrays) |
 | `sin` | `(sin [0 1.57])` | `[0 1]` | Element-wise sine (radians) |
 | `cos` | `(cos [0 3.14])` | `[1 -1]` | Element-wise cosine (radians) |
 | `exp` | `(exp [0 1])` | `[1 2.718]` | Element-wise e^x |
 | `log` | `(log [1 2.718])` | `[0 1]` | Element-wise natural log |
+| `tanh` | `(tanh [0 1])` | `[0 0.762]` | Element-wise hyperbolic tangent |
+
+## List Operations
+
+| Primitive | Example | Result | Description |
+|---|---|---|---|
+| `length` | `(length '(a b c))` | `3` | Number of elements in a Lisp list (CL length) |
 
 ## Reductions
 
@@ -94,6 +103,7 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 |---|---|---|
 | `softmax` | `(softmax logits)` | Numerically stable softmax over a rank-1 or rank-2 tensor |
 | `layer-norm` | `(layer-norm x eps)` | Layer normalisation: subtract mean, divide by std; apply scale/shift separately |
+| `causal-mask` | `(causal-mask n)` | (n x n) lower-triangular mask: 0.0 on/below diagonal, -1e9 above; used before softmax in attention |
 
 ## Symbolic
 

@@ -11,8 +11,8 @@
 ;;
 ;; Usage:
 ;;   (load "test_data/mod_kb.lisp")
-;;   (define kb (quote ()))
-;;   (set! kb (kb-assert (quote (dog is-a animal)) kb))
+;;   (defvar kb (quote ()))
+;;   (setq kb (kb-assert (quote (dog is-a animal)) kb))
 ;;   (kb-query (quote (?x is-a animal)) kb)
 ;;
 ;; Note: kb-infer walks chains transitively but does not detect cycles.
@@ -20,72 +20,72 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; List utilities
 
-(define filter (lambda (pred lst)
+(defun filter (pred lst)
     (if (not lst)
         ()
         (if (pred (car lst))
             (cons (car lst) (filter pred (cdr lst)))
-            (filter pred (cdr lst))))))
+            (filter pred (cdr lst)))))
 
-(define map (lambda (f lst)
+(defun map (f lst)
     (if (not lst)
         ()
-        (cons (f (car lst)) (map f (cdr lst))))))
+        (cons (f (car lst)) (map f (cdr lst)))))
 
-(define append (lambda (a b)
+(defun append (a b)
     (if (not a)
         b
-        (cons (car a) (append (cdr a) b)))))
+        (cons (car a) (append (cdr a) b))))
 
-(define flatten (lambda (lst)
+(defun flatten (lst)
     (if (not lst)
         ()
         (if (not (car lst))
             (flatten (cdr lst))
-            (if (pair? (car lst))
+            (if (consp (car lst))
                 (append (flatten (car lst)) (flatten (cdr lst)))
-                (cons (car lst) (flatten (cdr lst))))))))
+                (cons (car lst) (flatten (cdr lst)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Association list lookup
 ;; (assoc is internal C only, not exposed as a primitive)
 
-(define assoc (lambda (key alist)
+(defun assoc (key alist)
     (if (not alist)
         ()
-        (if (eq? (car (car alist)) key)
+        (if (equal (car (car alist)) key)
             (cdr (car alist))
-            (assoc key (cdr alist))))))
+            (assoc key (cdr alist)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; KB operations
 
 ;; kb-assert: prepend a fact, return new KB
-(define kb-assert (lambda (fact kb)
-    (cons fact kb)))
+(defun kb-assert (fact kb)
+    (cons fact kb))
 
 ;; kb-retract: remove all facts matching pattern, return new KB
-(define kb-retract (lambda (pattern kb)
-    (filter (lambda (f) (eq? (match pattern f) ERR)) kb)))
+(defun kb-retract (pattern kb)
+    (filter (lambda (f) (equal (match pattern f) ERR)) kb))
 
 ;; kb-query: return list of binding alists for all matching facts
-(define kb-query (lambda (pattern kb)
-    (filter (lambda (b) (not (eq? b ERR)))
-            (map (lambda (fact) (match pattern fact)) kb))))
+(defun kb-query (pattern kb)
+    (filter (lambda (b) (not (equal b ERR)))
+            (map (lambda (fact) (match pattern fact)) kb)))
 
 ;; kb-get: shorthand for (subject predicate ?value)
 ;; returns a flat list of matching values
-(define kb-get (lambda (subject predicate kb)
+(defun kb-get (subject predicate kb)
     (map (lambda (b) (assoc (quote value) b))
-         (kb-query (cons subject (cons predicate (cons (quote ?value) ()))) kb))))
+         (kb-query (cons subject (cons predicate (cons (quote ?value) ()))) kb)))
 
 ;; kb-infer: transitive closure of a relation
 ;; returns all objects reachable from subject via repeated rel lookups
 ;; e.g. (kb-infer 'dog 'is-a kb) => (animal living-thing ...)
-(define kb-infer (lambda (subject rel kb)
+(defun kb-infer (subject rel kb)
     (let* (direct (kb-get subject rel kb))
     (if (not direct)
         ()
         (append direct
                 (flatten (map (lambda (parent) (kb-infer parent rel kb))
-                              direct)))))))
+                              direct))))))

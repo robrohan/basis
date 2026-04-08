@@ -33,14 +33,14 @@
 (assert (shape 0) ERR)
 					; => ERR
 
-(print "-- tensor? predicate --")
-(assert (tensor? [1 2 3]) #t)
+(print "-- tensorp predicate --")
+(assert (tensorp [1 2 3]) #t)
 					; => #t
 
-(assert (tensor? 42) ())
+(assert (tensorp 42) ())
 					; => ()
 
-(assert (tensor? (quote hello)) ())
+(assert (tensorp (quote hello)) ())
 					; => ()
 
 (print "-- slice --")

@@ -2,7 +2,7 @@
 ;;
 
 (define assert (lambda (a b)
-		 (if (eq? a b)
+		 (if (equal a b)
 		     (print #t)
 		     (print ERR))))
 

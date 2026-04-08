@@ -218,14 +218,14 @@ static const char *test_eval_div(void)
 static const char *test_eval_int(void)
 {
     setup();
-    L e1 = cons(atom("int"), cons((L)3.9,  nil));
-    r2_assert("(int 3.9) == 3",   equ(eval(e1, env), (L)3.0));
+    L e1 = cons(atom("truncate"), cons((L)3.9,  nil));
+    r2_assert("(truncate 3.9) == 3",   equ(eval(e1, env), (L)3.0));
 
-    L e2 = cons(atom("int"), cons((L)-2.7, nil));
-    r2_assert("(int -2.7) == -2", equ(eval(e2, env), (L)-2.0));
+    L e2 = cons(atom("truncate"), cons((L)-2.7, nil));
+    r2_assert("(truncate -2.7) == -2", equ(eval(e2, env), (L)-2.0));
 
-    L e3 = cons(atom("int"), cons((L)5.0,  nil));
-    r2_assert("(int 5.0) == 5",   equ(eval(e3, env), (L)5.0));
+    L e3 = cons(atom("truncate"), cons((L)5.0,  nil));
+    r2_assert("(truncate 5.0) == 5",   equ(eval(e3, env), (L)5.0));
     return NULL;
 }
 
@@ -248,17 +248,17 @@ static const char *test_eval_lt(void)
 static const char *test_eval_eq(void)
 {
     setup();
-    L eq_t = cons(atom("eq?"), cons((L)42.0, cons((L)42.0, nil)));
-    L eq_f = cons(atom("eq?"), cons((L)1.0,  cons((L)2.0,  nil)));
-    r2_assert("(eq? 42 42) is tru", equ(eval(eq_t, env), tru));
-    r2_assert("(eq? 1 2) is nil",   equ(eval(eq_f, env), nil));
+    L eq_t = cons(atom("equal"), cons((L)42.0, cons((L)42.0, nil)));
+    L eq_f = cons(atom("equal"), cons((L)1.0,  cons((L)2.0,  nil)));
+    r2_assert("(equal 42 42) is tru", equ(eval(eq_t, env), tru));
+    r2_assert("(equal 1 2) is nil",   equ(eval(eq_f, env), nil));
 
     /* atoms compare by identity */
     L sym = atom("foo");
-    L eq_a = cons(atom("eq?"),
+    L eq_a = cons(atom("equal"),
                   cons(cons(atom("quote"), cons(sym, nil)),
                        cons(cons(atom("quote"), cons(sym, nil)), nil)));
-    r2_assert("(eq? 'foo 'foo) is tru", equ(eval(eq_a, env), tru));
+    r2_assert("(equal 'foo 'foo) is tru", equ(eval(eq_a, env), tru));
     return NULL;
 }
 
@@ -362,20 +362,20 @@ static const char *test_eval_cond(void)
 static const char *test_eval_pair(void)
 {
     setup();
-    /* (pair? '(1 . 2)) => #t */
+    /* (consp '(1 . 2)) => #t */
     L p       = cons((L)1.0, (L)2.0);
     L qp      = cons(atom("quote"), cons(p, nil));
-    L is_pair = cons(atom("pair?"), cons(qp, nil));
-    r2_assert("(pair? '(1 . 2)) is tru", equ(eval(is_pair, env), tru));
+    L is_pair = cons(atom("consp"), cons(qp, nil));
+    r2_assert("(consp '(1 . 2)) is tru", equ(eval(is_pair, env), tru));
 
-    /* (pair? 42) => () */
-    L not_pair = cons(atom("pair?"), cons((L)42.0, nil));
-    r2_assert("(pair? 42) is nil", equ(eval(not_pair, env), nil));
+    /* (consp 42) => () */
+    L not_pair = cons(atom("consp"), cons((L)42.0, nil));
+    r2_assert("(consp 42) is nil", equ(eval(not_pair, env), nil));
 
-    /* (pair? ()) => () */
+    /* (consp ()) => () */
     L qnil      = cons(atom("quote"), cons(nil, nil));
-    L nil_pair  = cons(atom("pair?"), cons(qnil, nil));
-    r2_assert("(pair? '()) is nil", equ(eval(nil_pair, env), nil));
+    L nil_pair  = cons(atom("consp"), cons(qnil, nil));
+    r2_assert("(consp '()) is nil", equ(eval(nil_pair, env), nil));
     return NULL;
 }
 
@@ -593,12 +593,12 @@ static const char *test_tensor_predicate(void)
     setup();
     float d[] = {1.f, 2.f};
     L v = make_vec(2, d);
-    /* (tensor? v) => #t */
-    L expr_t = cons(atom("tensor?"), cons(v, nil));
-    r2_assert("(tensor? [1 2]) is tru",   equ(eval(expr_t, env), tru));
-    /* (tensor? 42) => () */
-    L expr_f = cons(atom("tensor?"), cons((L)42.0, nil));
-    r2_assert("(tensor? 42) is nil",      equ(eval(expr_f, env), nil));
+    /* (tensorp v) => #t */
+    L expr_t = cons(atom("tensorp"), cons(v, nil));
+    r2_assert("(tensorp [1 2]) is tru",   equ(eval(expr_t, env), tru));
+    /* (tensorp 42) => () */
+    L expr_f = cons(atom("tensorp"), cons((L)42.0, nil));
+    r2_assert("(tensorp 42) is nil",      equ(eval(expr_f, env), nil));
     return NULL;
 }
 
@@ -996,10 +996,10 @@ static const char *test_tensor_length(void)
     setup();
     float d[] = {3.f, 4.f};
     L v = make_vec(2, d);
-    L len  = eval(cons(atom("length"),  cons(v, nil)), env);
-    L len2 = eval(cons(atom("length2"), cons(v, nil)), env);
-    r2_assert("length [3 4] == 5",   equ(len,  (L)5.0));
-    r2_assert("length2 [3 4] == 25", equ(len2, (L)25.0));
+    L len  = eval(cons(atom("norm"),  cons(v, nil)), env);
+    L len2 = eval(cons(atom("norm2"), cons(v, nil)), env);
+    r2_assert("norm [3 4] == 5",   equ(len,  (L)5.0));
+    r2_assert("norm2 [3 4] == 25", equ(len2, (L)25.0));
     return NULL;
 }
 
@@ -1023,10 +1023,10 @@ static const char *test_tensor_veq(void)
     float b[] = {1.f, 2.f, 3.f};
     float c[] = {1.f, 2.f, 4.f};
     L va = make_vec(3, a), vb = make_vec(3, b), vc = make_vec(3, c);
-    L eq  = eval(cons(atom("vec="), cons(va, cons(vb, nil))), env);
-    L neq = eval(cons(atom("vec="), cons(va, cons(vc, nil))), env);
-    r2_assert("vec= equal tensors is #t",     equ(eq, tru));
-    r2_assert("vec= unequal tensors is nil",  equ(neq, nil));
+    L eq  = eval(cons(atom("equalp"), cons(va, cons(vb, nil))), env);
+    L neq = eval(cons(atom("equalp"), cons(va, cons(vc, nil))), env);
+    r2_assert("equalp equal tensors is #t",     equ(eq, tru));
+    r2_assert("equalp unequal tensors is nil",  equ(neq, nil));
     return NULL;
 }
 
@@ -1040,14 +1040,14 @@ static const char *test_tensor_head_tail_vec(void)
     float d[] = {10.f, 20.f, 30.f};
     L v = make_vec(3, d);
 
-    L h = eval(cons(atom("head"), cons(v, nil)), env);
-    r2_assert("head of vec == 10", equ(h, (L)10.0));
+    L h = eval(cons(atom("first"), cons(v, nil)), env);
+    r2_assert("first of vec == 10", equ(h, (L)10.0));
 
-    L tl = eval(cons(atom("tail"), cons(v, nil)), env);
-    r2_assert("tail is TENS",        T(tl) == TENS);
-    r2_assert("tail len == 2",       tensor_heap[ord(tl)].len == 2);
-    r2_assert("tail[0] == 20",       tensor_heap[ord(tl)].data[0] == 20.f);
-    r2_assert("tail[1] == 30",       tensor_heap[ord(tl)].data[1] == 30.f);
+    L tl = eval(cons(atom("rest"), cons(v, nil)), env);
+    r2_assert("rest is TENS",        T(tl) == TENS);
+    r2_assert("rest len == 2",       tensor_heap[ord(tl)].len == 2);
+    r2_assert("rest[0] == 20",       tensor_heap[ord(tl)].data[0] == 20.f);
+    r2_assert("rest[1] == 30",       tensor_heap[ord(tl)].data[1] == 30.f);
     return NULL;
 }
 
@@ -1057,19 +1057,19 @@ static const char *test_tensor_head_tail_mat(void)
     float d[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
     L m = make_mat(2, 3, d);
 
-    /* head of 2x3 => first row [1 2 3] */
-    L h = eval(cons(atom("head"), cons(m, nil)), env);
-    r2_assert("head of mat is TENS",     T(h) == TENS);
-    r2_assert("head row rank == 1",      tensor_heap[ord(h)].rank == 1);
-    r2_assert("head row[0] == 1",        tensor_heap[ord(h)].data[0] == 1.f);
-    r2_assert("head row[2] == 3",        tensor_heap[ord(h)].data[2] == 3.f);
+    /* first of 2x3 => first row [1 2 3] */
+    L h = eval(cons(atom("first"), cons(m, nil)), env);
+    r2_assert("first of mat is TENS",     T(h) == TENS);
+    r2_assert("first row rank == 1",      tensor_heap[ord(h)].rank == 1);
+    r2_assert("first row[0] == 1",        tensor_heap[ord(h)].data[0] == 1.f);
+    r2_assert("first row[2] == 3",        tensor_heap[ord(h)].data[2] == 3.f);
 
-    /* tail of 2x3 => [[4 5 6]] (1x3) */
-    L tl = eval(cons(atom("tail"), cons(m, nil)), env);
-    r2_assert("tail of mat is TENS",     T(tl) == TENS);
-    r2_assert("tail shape[0] == 1",      tensor_heap[ord(tl)].shape[0] == 1);
-    r2_assert("tail shape[1] == 3",      tensor_heap[ord(tl)].shape[1] == 3);
-    r2_assert("tail[0][0] == 4",         tensor_heap[ord(tl)].data[0] == 4.f);
+    /* rest of 2x3 => [[4 5 6]] (1x3) */
+    L tl = eval(cons(atom("rest"), cons(m, nil)), env);
+    r2_assert("rest of mat is TENS",     T(tl) == TENS);
+    r2_assert("rest shape[0] == 1",      tensor_heap[ord(tl)].shape[0] == 1);
+    r2_assert("rest shape[1] == 3",      tensor_heap[ord(tl)].shape[1] == 3);
+    r2_assert("rest[0][0] == 4",         tensor_heap[ord(tl)].data[0] == 4.f);
     return NULL;
 }
 
@@ -1084,9 +1084,9 @@ static const char *test_tensor_fastpath_vec2(void)
     float b[] = {0.f, 0.f};
     L va = make_vec(2, a), vb = make_vec(2, b);
 
-    r2_assert("dot vec2",     equ(eval(cons(atom("dot"),     cons(va, cons(va, nil))), env), (L)25.0));
-    r2_assert("length vec2",  equ(eval(cons(atom("length"),  cons(va, nil)),           env), (L)5.0));
-    r2_assert("length2 vec2", equ(eval(cons(atom("length2"), cons(va, nil)),           env), (L)25.0));
+    r2_assert("dot vec2",    equ(eval(cons(atom("dot"),   cons(va, cons(va, nil))), env), (L)25.0));
+    r2_assert("norm vec2",   equ(eval(cons(atom("norm"),  cons(va, nil)),           env), (L)5.0));
+    r2_assert("norm2 vec2",  equ(eval(cons(atom("norm2"), cons(va, nil)),           env), (L)25.0));
     r2_assert("dist vec2",    equ(eval(cons(atom("dist"),    cons(vb, cons(va, nil))), env), (L)5.0));
     r2_assert("dist2 vec2",   equ(eval(cons(atom("dist2"),   cons(vb, cons(va, nil))), env), (L)25.0));
 
@@ -1104,7 +1104,7 @@ static const char *test_tensor_fastpath_vec4(void)
     L va = make_vec(4, a), vb = make_vec(4, b);
 
     r2_assert("dot vec4 orthogonal == 0", equ(eval(cons(atom("dot"), cons(va, cons(vb, nil))), env), (L)0.0));
-    r2_assert("length vec4 unit == 1",    equ(eval(cons(atom("length"), cons(va, nil)), env), (L)1.0));
+    r2_assert("norm vec4 unit == 1",    equ(eval(cons(atom("norm"), cons(va, nil)), env), (L)1.0));
 
     float c[] = {-1.f, 4.f, -9.f, 16.f};
     L vc = make_vec(4, c);
@@ -1347,57 +1347,57 @@ static const char *test_print_returns_tensor(void)
 static const char *test_set_bang_scalar(void)
 {
     setup();
-    /* (define x 1) (set! x 42) => x is now 42 */
+    /* (define x 1) (setq x 42) => x is now 42 */
     L def = cons(atom("define"), cons(atom("x"), cons((L)1.0, nil)));
     eval(def, env);
-    L set = cons(atom("set!"), cons(atom("x"), cons((L)42.0, nil)));
+    L set = cons(atom("setq"), cons(atom("x"), cons((L)42.0, nil)));
     L ret = eval(set, env);
-    r2_assert("set! returns new value",        equ(ret, (L)42.0));
-    r2_assert("set! mutates binding",          equ(eval(atom("x"), env), (L)42.0));
+    r2_assert("setq returns new value",        equ(ret, (L)42.0));
+    r2_assert("setq mutates binding",          equ(eval(atom("x"), env), (L)42.0));
     return NULL;
 }
 
 static const char *test_set_bang_tensor(void)
 {
     setup();
-    /* (define W [1 2 3]) (set! W [7 8 9]) => W is now [7 8 9] */
+    /* (define W [1 2 3]) (setq W [7 8 9]) => W is now [7 8 9] */
     float d1[] = {1.f, 2.f, 3.f};
     float d2[] = {7.f, 8.f, 9.f};
     L v1 = make_vec(3, d1);
     L v2 = make_vec(3, d2);
     L def = cons(atom("define"), cons(atom("W"), cons(v1, nil)));
     eval(def, env);
-    L set = cons(atom("set!"), cons(atom("W"), cons(v2, nil)));
+    L set = cons(atom("setq"), cons(atom("W"), cons(v2, nil)));
     eval(set, env);
     L val = eval(atom("W"), env);
-    r2_assert("set! tensor: is TENS",     T(val) == TENS);
-    r2_assert("set! tensor: data[0]==7",  tensor_heap[ord(val)].data[0] == 7.f);
-    r2_assert("set! tensor: data[2]==9",  tensor_heap[ord(val)].data[2] == 9.f);
+    r2_assert("setq tensor: is TENS",     T(val) == TENS);
+    r2_assert("setq tensor: data[0]==7",  tensor_heap[ord(val)].data[0] == 7.f);
+    r2_assert("setq tensor: data[2]==9",  tensor_heap[ord(val)].data[2] == 9.f);
     return NULL;
 }
 
 static const char *test_set_bang_unbound_is_err(void)
 {
     setup();
-    /* (set! undefined-var 1) => ERR (not defined) */
-    L set = cons(atom("set!"), cons(atom("no-such-var"), cons((L)1.0, nil)));
-    r2_assert("set! unbound returns ERR", equ(eval(set, env), err));
+    /* (setq undefined-var 1) => ERR (not defined) */
+    L set = cons(atom("setq"), cons(atom("no-such-var"), cons((L)1.0, nil)));
+    r2_assert("setq unbound returns ERR", equ(eval(set, env), err));
     return NULL;
 }
 
 static const char *test_set_bang_no_shadow(void)
 {
     setup();
-    /* define once, set! twice — env must not grow with shadow bindings */
+    /* define once, setq twice — env must not grow with shadow bindings */
     L def = cons(atom("define"), cons(atom("n"), cons((L)0.0, nil)));
     eval(def, env);
     L env_after_define = env;
-    L set1 = cons(atom("set!"), cons(atom("n"), cons((L)1.0, nil)));
+    L set1 = cons(atom("setq"), cons(atom("n"), cons((L)1.0, nil)));
     eval(set1, env);
-    L set2 = cons(atom("set!"), cons(atom("n"), cons((L)2.0, nil)));
+    L set2 = cons(atom("setq"), cons(atom("n"), cons((L)2.0, nil)));
     eval(set2, env);
-    r2_assert("set! does not grow env",  equ(env, env_after_define));
-    r2_assert("n is 2 after two set!s",  equ(eval(atom("n"), env), (L)2.0));
+    r2_assert("setq does not grow env",  equ(env, env_after_define));
+    r2_assert("n is 2 after two setqs",  equ(eval(atom("n"), env), (L)2.0));
     return NULL;
 }
 
@@ -1435,6 +1435,47 @@ static const char *test_str_tag_reserved(void)
     setup();
     r2_assert("STR tag is 0x7ffe", STR == 0x7ffe);
     r2_assert("STR tag distinct from TENS", STR != TENS);
+    return NULL;
+}
+
+/* Helper: parse one expression from a string and return the result of eval. */
+static L parse_eval(const char *src)
+{
+    char buf_copy[256];
+    snprintf(buf_copy, sizeof(buf_copy), "%s", src);
+    FILE *f = fmemopen(buf_copy, strlen(buf_copy), "r");
+    input_stream = f;
+    see = ' ';
+    L expr = Read();
+    fclose(f);
+    input_stream = NULL;
+    return eval(expr, env);
+}
+
+static const char *test_scan_hash_t(void)
+{
+    setup();
+    /* #t must be tokenized as a single atom, not split into '#' and 't' */
+    L result = parse_eval("#t");
+    r2_assert("scan #t is atom tru", equ(result, tru));
+    return NULL;
+}
+
+static const char *test_scan_cond_hash_t(void)
+{
+    setup();
+    /* (cond (#t 42)) — the #t branch must be reachable */
+    L result = parse_eval("(cond (#t 42))");
+    r2_assert("(cond (#t 42)) == 42", equ(result, (L)42.0));
+    return NULL;
+}
+
+static const char *test_scan_shebang(void)
+{
+    setup();
+    /* #! at the start of a line must be skipped as a shebang comment */
+    L result = parse_eval("#!/usr/bin/env basis\n99");
+    r2_assert("shebang skipped, reads 99", equ(result, (L)99.0));
     return NULL;
 }
 
@@ -1528,6 +1569,9 @@ static const char *all_tests(void)
     r2_run_test(test_rank_scalar_number);
     r2_run_test(test_rank1_single_tensor);
     r2_run_test(test_str_tag_reserved);
+    r2_run_test(test_scan_hash_t);
+    r2_run_test(test_scan_cond_hash_t);
+    r2_run_test(test_scan_shebang);
     return NULL;
 }
 

@@ -130,29 +130,33 @@ L evlis(L t, L e)
 }
 
 /* Lisp primitives:
-   (eval x)            return evaluated x (such as when x was quoted)
-   (quote x)           special form, returns x unevaluated "as is"
-   (cons x y)          construct pair (x . y)
-   (car p)             car of pair p
-   (cdr p)             cdr of pair p
-   (int n)             integer part of n
-   (< n1 n2)           #t if n1<n2, otherwise ()
-   (eq? x y)           #t if x equals y, otherwise ()
-   (pair? x)           #t if x is a non-empty list, a cons cell or closure
-   (or x1 x2 ... xk)   first x that is not (), otherwise ()
-   (and x1 x2 ... xk)  last x if all x are not (), otherwise ()
-   (not x)             #t if x is (), otherwise ()
+   (eval x)                return evaluated x (such as when x was quoted)
+   (quote x)               special form, returns x unevaluated "as is"
+   (cons x y)              construct pair (x . y)
+   (car p)                 car of pair p
+   (cdr p)                 cdr of pair p
+   (truncate n)            integer part of n (CL truncate)
+   (< n1 n2)               #t if n1<n2, otherwise ()
+   (> n1 n2)               #t if n1>n2, otherwise ()
+   (consp x)               #t if x is a non-empty list, a cons cell or closure
+   (or x1 x2 ... xk)       first x that is not (), otherwise ()
+   (and x1 x2 ... xk)      last x if all x are not (), otherwise ()
+   (not x)                 #t if x is (), otherwise ()
    (cond (x1 y1)
          (x2 y2)
          ...
-         (xk yk))      the first yi for which xi evaluates to non-()
-   (if x y z)          if x is non-() then y else z
+         (xk yk))          the first yi for which xi evaluates to non-()
+   (if x y z)              if x is non-() then y else z
    (let* (v1 x1)
          (v2 x2)
          ...
-         y)            sequentially binds each variable v1 to xi to evaluate y
-   (lambda v x)        construct a closure
-   (define v x)        define a named value globally */
+         y)                sequentially binds each variable v1 to xi to evaluate y
+   (lambda v x)            construct a closure
+   (define v x)            define a named value globally (kept for backward compat)
+   (defparameter v x)      define a named value globally (CL style)
+   (defvar v x)            define a named value globally (CL style)
+   (defun name (args) body) define a named function globally (CL style)
+   (setq v x)              update an existing binding in-place (CL setq) */
 L f_eval(L t, L e)
 {
     return eval(car(evlis(t, e)), e);
@@ -252,7 +256,7 @@ L f_define(L t, L e)
     return car(t);
 }
 
-/* (set! v x) — update the first binding of v in env in-place; error if unbound */
+/* (setq v x) — update the first binding of v in env in-place; error if unbound */
 L f_set(L t, L e)
 {
     L var = car(t);
@@ -269,27 +273,39 @@ L f_set(L t, L e)
     return err; /* variable not found */
 }
 
+/* (defun name (args) body) — define a named function, CL style */
+L f_defun(L t, L e)
+{
+    L name = car(t);
+    L args = car(cdr(t));
+    L body = car(cdr(cdr(t)));
+    env = pair(name, closure(args, body, e), env);
+    return name;
+}
+
 /* table of Lisp core primitives, each has a name s and function pointer f */
 struct prims prim[MAX_PRIMS] = {
-    {"eval",    f_eval},
-    {"quote",   f_quote},
-    {"cons",    f_cons},
-    {"car",     f_car},
-    {"cdr",     f_cdr},
-    {"int",     f_int},
-    {"<",       f_lt},
-    {">",       f_gt},
-    {"pair?",   f_pair},
-    {"or",      f_or},
-    {"and",     f_and},
-    {"not",     f_not},
-    {"cond",    f_cond},
-    {"if",      f_if},
-    {"let*",    f_leta},
-    {"lambda",  f_lambda},
-    {"define",  f_define},
-    {"def",     f_define},
-    {"set!",    f_set},
+    {"eval",         f_eval},
+    {"quote",        f_quote},
+    {"cons",         f_cons},
+    {"car",          f_car},
+    {"cdr",          f_cdr},
+    {"truncate",     f_int},
+    {"<",            f_lt},
+    {">",            f_gt},
+    {"consp",        f_pair},
+    {"or",           f_or},
+    {"and",          f_and},
+    {"not",          f_not},
+    {"cond",         f_cond},
+    {"if",           f_if},
+    {"let*",         f_leta},
+    {"lambda",       f_lambda},
+    {"define",       f_define},
+    {"defparameter", f_define},
+    {"defvar",       f_define},
+    {"defun",        f_defun},
+    {"setq",         f_set},
     {0}
 };
 int prim_count = CORE_PRIM_COUNT;
@@ -370,7 +386,9 @@ char scan(void)
                     look();
             else
             {
-                buf[0] = '#'; buf[1] = 0; return *buf; /* '#t' etc — let atomic() handle it */
+                buf[i++] = '#'; /* '#t', '#f', etc — put '#' in buf and break out so
+                                   the normal token reader appends the rest (e.g. 't') */
+                break;
             }
         }
         else

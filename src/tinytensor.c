@@ -278,7 +278,7 @@ static L f_slice(L t, L e)
     return box(TENS, (I)(alloc_tensor(tens->rank - 1, sh, row, tens->data + i * row) - tensor_heap));
 }
 
-/* (head t) -> first element or row (sugar for slice 0) */
+/* (first t) -> first element or row (sugar for slice 0); CL-style name */
 static L f_head(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -295,7 +295,7 @@ static L f_head(L t, L e)
     return box(TENS, (I)(alloc_tensor(tens->rank - 1, sh, row, tens->data) - tensor_heap));
 }
 
-/* (tail t) -> all elements after the first (rank-1: subvector, rank-2: submatrix) */
+/* (rest t) -> all elements after the first (rank-1: subvector, rank-2: submatrix); CL-style name */
 static L f_tail(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -314,7 +314,7 @@ static L f_tail(L t, L e)
     return box(TENS, (I)(alloc_tensor(tens->rank, sh, new_len, tens->data + row) - tensor_heap));
 }
 
-/* (tensor? x) -> #t if x is a tensor */
+/* (tensorp x) -> #t if x is a tensor; CL predicate naming convention */
 static L f_tensor_p(L t, L e)
 {
     L x = car(evlis(t, e));
@@ -532,11 +532,22 @@ static L f_causal_mask(L t, L e)
 /* (dot v1 v2) — dot product → scalar; vec2/vec4 fast paths */
 static L f_dot(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dot, vec4_dot, vecn_dot)}
 
-/* (length v) — Euclidean length → scalar; vec2/vec4 fast paths */
+/* (norm v) — Euclidean norm (length) → scalar; vec2/vec4 fast paths */
 static L f_length(L t, L e){TENS_UNARY_SCALAR_DISP(vec2_length, vec4_length, vecn_length)}
 
-/* (length2 v) — length squared → scalar; vec2/vec4 fast paths */
+/* (norm2 v) — norm squared (length squared) → scalar; vec2/vec4 fast paths */
 static L f_length2(L t, L e){TENS_UNARY_SCALAR_DISP(vec2_length_sqrd, vec4_length_sqrd, vecn_length_sqrd)}
+
+/* (length lst) — number of elements in a Lisp list, CL convention */
+static L f_list_length(L t, L e)
+{
+    L lst = car(evlis(t, e));
+    if (T(lst) == NIL) return 0.0;
+    if (T(lst) != CONS) return err;
+    I n = 0;
+    while (T(lst) == CONS) { n++; lst = cdr(lst); }
+    return (double)n;
+}
 
 /* (dist v1 v2) — Euclidean distance → scalar; vec2/vec4 fast paths */
 static L f_dist(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist, vec4_dist, vecn_dist)}
@@ -739,7 +750,7 @@ int tensor_equal(const tensor_t *a, const tensor_t *b)
     return vecn_equals(a->data, b->data, (int)a->len);
 }
 
-/* (vec= v1 v2) — element-wise equality -> #t or () */
+/* (equalp v1 v2) — element-wise equality -> #t or (); CL equalp does array comparison */
 static L f_veq(L t, L e)
 {
     t = evlis(t, e);
@@ -917,9 +928,9 @@ void register_tensor_prims(void)
     register_prim("shape",       f_shape);
     register_prim("rank",        f_rank);
     register_prim("slice",       f_slice);
-    register_prim("head",        f_head);
-    register_prim("tail",        f_tail);
-    register_prim("tensor?",     f_tensor_p);
+    register_prim("first",       f_head);
+    register_prim("rest",        f_tail);
+    register_prim("tensorp",     f_tensor_p);
     register_prim("matmul",      f_matmul);
     register_prim("@",           f_matmul);
     register_prim("transpose",   f_transpose);
@@ -935,11 +946,12 @@ void register_tensor_prims(void)
     register_prim("zero",        f_zero);
     register_prim("causal-mask", f_causal_mask);
     register_prim("dot",         f_dot);
-    register_prim("length",      f_length);
-    register_prim("length2",     f_length2);
+    register_prim("norm",        f_length);
+    register_prim("norm2",       f_length2);
     register_prim("dist",        f_dist);
     register_prim("dist2",       f_dist2);
-    register_prim("vec=",        f_veq);
+    register_prim("equalp",      f_veq);
+    register_prim("length",      f_list_length);
     register_prim("make-tensor", f_make_tensor);
     register_prim("sum",         f_sum);
     register_prim("amax",        f_amax);
