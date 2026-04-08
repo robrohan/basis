@@ -1438,6 +1438,47 @@ static const char *test_str_tag_reserved(void)
     return NULL;
 }
 
+/* Helper: parse one expression from a string and return the result of eval. */
+static L parse_eval(const char *src)
+{
+    char buf_copy[256];
+    snprintf(buf_copy, sizeof(buf_copy), "%s", src);
+    FILE *f = fmemopen(buf_copy, strlen(buf_copy), "r");
+    input_stream = f;
+    see = ' ';
+    L expr = Read();
+    fclose(f);
+    input_stream = NULL;
+    return eval(expr, env);
+}
+
+static const char *test_scan_hash_t(void)
+{
+    setup();
+    /* #t must be tokenized as a single atom, not split into '#' and 't' */
+    L result = parse_eval("#t");
+    r2_assert("scan #t is atom tru", equ(result, tru));
+    return NULL;
+}
+
+static const char *test_scan_cond_hash_t(void)
+{
+    setup();
+    /* (cond (#t 42)) — the #t branch must be reachable */
+    L result = parse_eval("(cond (#t 42))");
+    r2_assert("(cond (#t 42)) == 42", equ(result, (L)42.0));
+    return NULL;
+}
+
+static const char *test_scan_shebang(void)
+{
+    setup();
+    /* #! at the start of a line must be skipped as a shebang comment */
+    L result = parse_eval("#!/usr/bin/env basis\n99");
+    r2_assert("shebang skipped, reads 99", equ(result, (L)99.0));
+    return NULL;
+}
+
 /* -----------------------------------------------------------------------
    Test runner
    --------------------------------------------------------------------- */
@@ -1528,6 +1569,9 @@ static const char *all_tests(void)
     r2_run_test(test_rank_scalar_number);
     r2_run_test(test_rank1_single_tensor);
     r2_run_test(test_str_tag_reserved);
+    r2_run_test(test_scan_hash_t);
+    r2_run_test(test_scan_cond_hash_t);
+    r2_run_test(test_scan_shebang);
     return NULL;
 }
 

@@ -386,7 +386,9 @@ char scan(void)
                     look();
             else
             {
-                buf[0] = '#'; buf[1] = 0; return *buf; /* '#t' etc — let atomic() handle it */
+                buf[i++] = '#'; /* '#t', '#f', etc — put '#' in buf and break out so
+                                   the normal token reader appends the rest (e.g. 't') */
+                break;
             }
         }
         else
