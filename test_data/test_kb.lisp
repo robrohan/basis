@@ -15,6 +15,7 @@
              (animal is-a living-thing)
              (dog has fur)
              (dog has legs)
+	     (car bbox [5 4 3])
              (car mass 1500)
              (dog mass 30)))
 
