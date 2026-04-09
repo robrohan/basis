@@ -18,7 +18,6 @@ STD:=c11
 GGUF_INC  := -I./vendor/gguf
 GGUF_OBJS  = ./build/$(PLATFORM)/$(CPU)/gguflib.o ./build/$(PLATFORM)/$(CPU)/fp16.o
 
-
 ifeq ($(OS), Darwin)
 #	the CI/CD doesn't have BLAS so we need to disable it
 #	but only for mac CI/CD. Fall back to standard will work
@@ -44,7 +43,7 @@ endif
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 	$(CC) -O2 -std=$(STD) -c ./vendor/gguf/fp16.c -o $@
 
-hash = $(shell git log --pretty=format:'%h' -n 1)
+HASH = $(shell git log --pretty=format:'%h' -n 1)
 
 help:
 	@echo "make clean"
@@ -82,6 +81,7 @@ build: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
+		-DVERSION=\"$(HASH)\" \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
@@ -94,6 +94,7 @@ test: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
+		-DVERSION=\"$(HASH)\" \
 		$(BLAS_CFLAGS) \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
 		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c \
@@ -112,6 +113,7 @@ release_cli: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
+		-DVERSION=\"$(HASH)\" \
 		$(BLAS_CFLAGS) \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
 		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \

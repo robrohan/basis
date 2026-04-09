@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+
 static void init(void)
 {
     I i;
@@ -31,7 +32,7 @@ static int run_file(const char *path)
     FILE *fp = fopen(path, "r");
     if (!fp)
     {
-        fprintf(stderr, "basis: cannot open '%s'\n", path);
+        fprintf(stderr, "Basis: cannot open '%s'\n", path);
         return 1;
     }
     input_stream = fp;
@@ -50,11 +51,11 @@ static int run_file(const char *path)
    future: replace with r2_termui for richer interactive experience. */
 static void repl(void)
 {
-    printf("basis\n");
-    printf("ctrl+d to quit\n");
+    printf(":: Basis version %s\n", VERSION);
+    printf(":: Ctrl+d to quit\n");
     while (1)
     {
-        printf("\n%u> ", sp - hp / 8);
+        printf("\n(%06x)[%06x]> ", sp - hp / 8, th);
         fflush(stdout);
         print(eval(Read(), env));
         gc();
@@ -66,15 +67,19 @@ int main(int argc, char *argv[])
     int opt;
     char *file = NULL;
 
-    while ((opt = getopt(argc, argv, "f:")) != -1)
+    while ((opt = getopt(argc, argv, "vf:")) != -1)
     {
         switch (opt)
         {
-        case 'f':
-            file = optarg;
-            break;
+	case 'f':
+	  file = optarg;
+	  break;
+	case 'v':
+	  printf("Basis version %s\n", VERSION);
+	  return 1;
+	  break;
         default:
-            fprintf(stderr, "usage: basis [-f file.lisp] [file.lisp]\n");
+            fprintf(stderr, "Usage: basis [-v] [-f] [file.lisp]\n");
             return 1;
         }
     }
