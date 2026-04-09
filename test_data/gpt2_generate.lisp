@@ -234,7 +234,7 @@
 ;; Entry point
 
 (define N_TOKENS 10)
-(define prompt "once upon a time")
+(define prompt "This is a test and")
 
 (print "--- prompt ---")
 (print prompt)
