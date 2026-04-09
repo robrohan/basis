@@ -5,14 +5,14 @@
 #include <stdio.h>
 
 /* recursively print a sub-tensor rooted at data[offset] with given shape/rank */
-static void print_tensor(const float *data, const I *shape, I rank, I offset)
+static void print_tensor(const float *data, const II *shape, II rank, II offset)
 {
     if (data == NULL)
     {
         return;
     }
 
-    I i;
+    II i;
     printf("[");
     if (rank == 1)
     {
@@ -26,7 +26,7 @@ static void print_tensor(const float *data, const I *shape, I rank, I offset)
     else
     {
         /* stride = product of remaining dimensions */
-        I stride = 1;
+        II stride = 1;
         for (i = 1; i < rank; i++)
             stride *= shape[i];
         for (i = 0; i < shape[0]; i++)
@@ -100,15 +100,15 @@ static L f_print(L t, L e)
 
 /* (equal a b) — full equality: tensors compare rank+shape+elements, strings and
    atoms compare by interned address, numbers compare by value, everything else
-   bitwise. CL `equal` does structural/deep equality. Defined here rather than
+   bitwise. CL `equal` does sl_tructural/deep equality. Defined here rather than
    in tinylisp.c so it can see both heaps. */
 static L f_eq(L t, L e)
 {
     t = evlis(t, e);
     L xa = car(t), xb = car(cdr(t));
     if (T(xa) == TENS && T(xb) == TENS)
-        return tensor_equal(&tensor_heap[ord(xa)], &tensor_heap[ord(xb)]) ? tru : nil;
-    return equ(xa, xb) ? tru : nil;
+        return tensor_equal(&tensor_heap[ord(xa)], &tensor_heap[ord(xb)]) ? l_tru : l_nil;
+    return equ(xa, xb) ? l_tru : l_nil;
 }
 
 /* (gc) — force a garbage collection cycle, returns () */
@@ -117,7 +117,7 @@ static L f_gc(L t, L e)
     (void)t;
     (void)e;
     gc();
-    return nil;
+    return l_nil;
 }
 
 
@@ -128,13 +128,13 @@ static L f_load(L t, L e)
 {
     L arg = car(evlis(t, e));
     if (T(arg) != STR && T(arg) != ATOM)
-        return err;
+        return l_err;
 
     const char *path = A + ord(arg);
     FILE *fp = fopen(path, "r");
     if (!fp) {
         fprintf(stderr, "load: cannot open '%s'\n", path);
-        return err;
+        return l_err;
     }
 
     FILE *saved_stream = input_stream;
@@ -144,14 +144,14 @@ static L f_load(L t, L e)
     see = ' '; /* reset lookahead for new input stream */
 
     while (scan()) {
-        eval(parse(), env);
+        eval(parse(), l_env);
         gc();
     }
 
     fclose(fp);
     input_stream = saved_stream;
     see = saved_see; /* restore lookahead so caller's scanner is unaffected */
-    return nil;
+    return l_nil;
 }
 
 void register_runtime_prims(void)

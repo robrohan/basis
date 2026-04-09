@@ -10,19 +10,19 @@
 /* (load-gguf "model.gguf")
    Opens the GGUF file, skips metadata, iterates every tensor, dequantizes
    each to float32, allocates it in the basis tensor heap, and binds the
-   tensor name as an atom in the global env.
-   Returns the count of loaded tensors, or ERR if the file cannot be opened. */
+   tensor name as an atom in the global l_env.
+   Returns the count of loaded tensors, or L_ERR if the file cannot be opened. */
 static L f_load_gguf(L t, L e)
 {
     L arg = car(evlis(t, e));
-    if (T(arg) != STR && T(arg) != ATOM) return err;
+    if (T(arg) != STR && T(arg) != ATOM) return l_err;
 
     const char *path = A + ord(arg);
 
     gguf_ctx *ctx = gguf_open(path);
     if (!ctx) {
         fprintf(stderr, "load-gguf: cannot open '%s'\n", path);
-        return err;
+        return l_err;
     }
 
     /* skip all metadata key-value pairs — we only want tensor weights */
@@ -48,16 +48,17 @@ static L f_load_gguf(L t, L e)
            basis stores shape[0]=rows=dim[1], shape[1]=cols=dim[0], making
            basis's row-major indexing match the actual data layout.
            1D tensors (biases, norms) are not affected. */
-        I rank  = (I)tensor.ndim;
-        I len   = (I)tensor.num_weights;
-        I shape[MAX_RANK];
-        I i;
+
+        II rank  = (II)tensor.ndim;
+        II len   = (II)tensor.num_weights;
+        II shape[MAX_RANK];
+        II i;
         if (rank == 2) {
-            shape[0] = (I)tensor.dim[1];   /* outer dim → rows */
-            shape[1] = (I)tensor.dim[0];   /* inner dim → cols */
+            shape[0] = (II)tensor.dim[1];   /* outer dim → rows */
+            shape[1] = (II)tensor.dim[0];   /* inner dim → cols */
         } else {
             for (i = 0; i < rank; i++)
-                shape[i] = (I)tensor.dim[i];
+                shape[i] = (II)tensor.dim[i];
         }
 
         /* allocate tensor in basis heap, then free the temporary float array */
@@ -70,8 +71,8 @@ static L f_load_gguf(L t, L e)
         memcpy(name, tensor.name, nl);
         name[nl] = '\0';
 
-        /* bind name → tensor in the global environment */
-        env = pair(atom(name), box(TENS, (I)(bt - tensor_heap)), env);
+        /* bind name → tensor in the global l_environment */
+        l_env = pair(atom(name), box(TENS, (II)(bt - tensor_heap)), l_env);
 
         fprintf(stderr, "  %s  [", name);
         for (i = 0; i < rank; i++) {

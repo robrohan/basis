@@ -18,7 +18,7 @@ STD:=c11
 GGUF_INC  := -I./vendor/gguf
 GGUF_OBJS  = ./build/$(PLATFORM)/$(CPU)/gguflib.o ./build/$(PLATFORM)/$(CPU)/fp16.o
 
-ifeq ($(OS), Darwin)
+ifeq ($(PLATFORM), Darwin)
 #	the CI/CD doesn't have BLAS so we need to disable it
 #	but only for mac CI/CD. Fall back to standard will work
 	ifndef NO_BLAS
@@ -36,12 +36,17 @@ endif
 
 ./build/$(PLATFORM)/$(CPU)/gguflib.o: ./vendor/gguf/gguflib.c ./vendor/gguf/gguflib.h
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
-	$(CC) -O2 -std=$(STD) -D_POSIX_C_SOURCE=200809L $(GGUF_INC) \
-		-c ./vendor/gguf/gguflib.c -o $@
+	$(CC) -O2 -std=$(STD) \
+	-D_POSIX_C_SOURCE=200809L \
+	$(GGUF_INC) \
+	-c ./vendor/gguf/gguflib.c \
+	-o $@ 
 
 ./build/$(PLATFORM)/$(CPU)/fp16.o: ./vendor/gguf/fp16.c ./vendor/gguf/fp16.h
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
-	$(CC) -O2 -std=$(STD) -c ./vendor/gguf/fp16.c -o $@
+	$(CC) -O2 -std=$(STD) \
+	-c ./vendor/gguf/fp16.c \
+	-o $@ 
 
 HASH = $(shell git log --pretty=format:'%h' -n 1)
 
@@ -83,11 +88,13 @@ build: $(GGUF_OBJS)
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
+		$(BLAS_CFLAGS) \
+		$(BLAS_LDFLAGS) \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm 
 
 test: $(GGUF_OBJS)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
@@ -95,16 +102,16 @@ test: $(GGUF_OBJS)
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
-		$(BLAS_CFLAGS) \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
 		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c \
 		./src/test_main.c \
+		$(BLAS_CFLAGS) \
+		$(BLAS_LDFLAGS) \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
-		$(BLAS_LDFLAGS) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm 
 
 	./build/$(PLATFORM)/$(CPU)/$(APP).test
 

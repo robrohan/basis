@@ -31,7 +31,7 @@
         p    pair, a cons of two Lisp expressions
         e,d  environment, a list of pairs, e.g. created with (define v x)
         v    the name of a variable (an atom) or a list of variables */
-typedef uint32_t I;
+typedef uint32_t II;
 typedef double   L;
 
 /* T(x) returns the tag bits of a NaN-boxed Lisp expression x */
@@ -46,25 +46,25 @@ typedef double   L;
 // These exist somewhere :)
 /* tensor: rank-N array of floats, backed by r2_maths vecn_* operations */
 typedef struct {
-    I     rank;
-    I     shape[MAX_RANK];
-    I     len;   /* total number of elements (product of shape) */
+    II     rank;
+    II     shape[MAX_RANK];
+    II     len;   /* total number of elements (product of shape) */
     float *data; /* heap-allocated flat row-major float array   */
 } tensor_t;
 
-extern I hp, sp, th;
-extern const I ATOM, PRIM, CONS, CLOS, NIL, TENS, STR;
+extern II hp, sp, th;
+extern const II ATOM, PRIM, CONS, CLOS, NIL, TENS, STR;
 extern L cell[N];
 extern tensor_t tensor_heap[MAX_TENSORS];
-extern L nil, tru, err, env;
+extern L l_nil, l_tru, l_err, l_env;
 struct prims { const char *s; L (*f)(L, L); };
 extern struct prims prim[MAX_PRIMS];
 extern int prim_count;
 
-L box(I t, I i);
-I ord(L x);
+L box(II t, II i);
+II ord(L x);
 L num(L n);
-I equ(L x, L y);
+II equ(L x, L y);
 L atom(const char *s);
 L cons(L x, L y);
 L car(L p);
@@ -72,8 +72,8 @@ L cdr(L p);
 L pair(L v, L x, L e);
 L closure(L v, L x, L e);
 L assoc(L v, L e);
-I is_nil(L x);
-I let(L x);
+II is_nil(L x);
+II let(L x);
 L eval(L, L);
 L evlis(L t, L e);
 

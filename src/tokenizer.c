@@ -196,13 +196,13 @@ static void str_arr_cb(void *priv, uint32_t type, union gguf_value *val,
  * Reads tokenizer.ggml.tokens and tokenizer.ggml.merges from
  * the GGUF metadata.  Builds the reverse-vocab and merge hash
  * tables needed by tokenize.  Returns the vocabulary size, or
- * ERR if the file cannot be opened.
+ * L_ERR if the file cannot be opened.
  * ============================================================ */
 
 static L f_load_gguf_vocab(L t, L e)
 {
     L arg = car(evlis(t, e));
-    if (T(arg) != STR && T(arg) != ATOM) return err;
+    if (T(arg) != STR && T(arg) != ATOM) return l_err;
     const char *path = A + ord(arg);
 
     init_b2u();
@@ -210,7 +210,7 @@ static L f_load_gguf_vocab(L t, L e)
     gguf_ctx *ctx = gguf_open(path);
     if (!ctx) {
         fprintf(stderr, "load-gguf-vocab: cannot open '%s'\n", path);
-        return err;
+        return l_err;
     }
 
     /* (re-)allocate hash tables */
@@ -292,7 +292,7 @@ static L f_token_to_str(L t, L e)
 {
     L arg = car(evlis(t, e));
     uint32_t id = (uint32_t)arg;
-    if (!vocab || id >= vocab_sz) return err;
+    if (!vocab || id >= vocab_sz) return l_err;
     init_b2u();
     char out[512];
     tok_decode(vocab[id], out);
@@ -309,15 +309,15 @@ static L f_token_to_str(L t, L e)
 static L f_detokenize(L t, L e)
 {
     L arg = car(evlis(t, e));
-    if (T(arg) != TENS || !vocab) return err;
+    if (T(arg) != TENS || !vocab) return l_err;
     init_b2u();
 
     tensor_t *ta = tensor_heap + ord(arg);
     /* upper bound: each token can decode to at most ~8 bytes */
     char *buf = (char *)malloc((size_t)ta->len * 8 + 1);
-    if (!buf) return err;
+    if (!buf) return l_err;
     int pos = 0;
-    I i;
+    II i;
     for (i = 0; i < ta->len; i++) {
         uint32_t id = (uint32_t)ta->data[i];
         if (id >= vocab_sz) continue;
@@ -354,24 +354,24 @@ typedef struct bpe_node {
 static L f_tokenize(L t, L e)
 {
     L arg = car(evlis(t, e));
-    if (T(arg) != STR && T(arg) != ATOM) return err;
+    if (T(arg) != STR && T(arg) != ATOM) return l_err;
     if (!vocab || !rvocab || !merge_ht) {
         fprintf(stderr, "tokenize: call (load-gguf-vocab) first\n");
-        return err;
+        return l_err;
     }
     init_b2u();
 
     const char *text = A + ord(arg);
     size_t tlen = strlen(text);
     if (tlen == 0) {
-        I shape[1] = {0};
+        II shape[1] = {0};
         tensor_t *bt = alloc_tensor(1, shape, 0, NULL);
-        return box(TENS, (I)(bt - tensor_heap));
+        return box(TENS, (II)(bt - tensor_heap));
     }
 
     /* Step 1+2: one node per input byte, id = base token for that byte */
     bpe_node_t *nodes = (bpe_node_t *)malloc(tlen * sizeof(bpe_node_t));
-    if (!nodes) return err;
+    if (!nodes) return l_err;
 
     int n = 0;
     size_t i;
@@ -427,17 +427,17 @@ static L f_tokenize(L t, L e)
 
     /* Step 4: collect IDs into a float array for the tensor */
     float *ids = (float *)malloc((size_t)n * sizeof(float));
-    if (!ids) { free(nodes); return err; }
+    if (!ids) { free(nodes); return l_err; }
     int idx = 0;
     bpe_node_t *nd;
     for (nd = nodes; nd; nd = nd->next)
         ids[idx++] = (float)nd->id;
     free(nodes);
 
-    I shape[1] = {(I)idx};
-    tensor_t *bt = alloc_tensor(1, shape, (I)idx, ids);
+    II shape[1] = {(II)idx};
+    tensor_t *bt = alloc_tensor(1, shape, (II)idx, ids);
     free(ids);
-    return box(TENS, (I)(bt - tensor_heap));
+    return box(TENS, (II)(bt - tensor_heap));
 }
 
 /* ============================================================

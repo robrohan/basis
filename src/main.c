@@ -10,18 +10,18 @@
 
 static void init(void)
 {
-    I i;
-    nil = box(NIL, 0);
-    err = atom("ERR");
-    tru = atom("#t");
-    env = pair(tru, tru, nil);
+    II i;
+    l_nil = box(NIL, 0);
+    l_err = atom("ERR");
+    l_tru = atom("#t");
+    l_env = pair(l_tru, l_tru, l_nil);
     register_tensor_prims();
     register_symbolic_prims();
     register_runtime_prims();
     register_gguf_prims();
     register_tokenizer_prims();
     for (i = 0; prim[i].s; ++i)
-        env = pair(atom(prim[i].s), box(PRIM, i), env);
+        l_env = pair(atom(prim[i].s), box(PRIM, i), l_env);
 }
 
 /* headless file evaluation — no implicit output.
@@ -38,7 +38,7 @@ static int run_file(const char *path)
     input_stream = fp;
     while (scan())
     {
-        eval(parse(), env);
+        eval(parse(), l_env);
         gc();
     }
     fflush(stdout);
@@ -57,7 +57,7 @@ static void repl(void)
     {
         printf("\n(%06x)[%06x]> ", sp - hp / 8, th);
         fflush(stdout);
-        print(eval(Read(), env));
+        print(eval(Read(), l_env));
         gc();
     }
 }
