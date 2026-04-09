@@ -18,6 +18,23 @@ STD:=c11
 GGUF_INC  := -I./vendor/gguf
 GGUF_OBJS  = ./build/$(PLATFORM)/$(CPU)/gguflib.o ./build/$(PLATFORM)/$(CPU)/fp16.o
 
+
+ifeq ($(OS), Darwin)
+#	the CI/CD doesn't have BLAS so we need to disable it
+#	but only for mac CI/CD. Fall back to standard will work
+	ifndef NO_BLAS
+		BLAS_CFLAGS  = -DHAVE_BLAS -DACCELERATE_NEW_LAPACK -framework Accelerate
+		BLAS_LDFLAGS = -framework Accelerate
+	endif
+else
+	BLAS_LIBS := $(shell pkg-config --libs openblas 2>/dev/null)
+	ifneq ($(BLAS_LIBS),)
+		BLAS_CFLAGS  = -DHAVE_BLAS $(shell pkg-config --cflags openblas)
+		BLAS_LDFLAGS = $(shell pkg-config --libs openblas)
+	endif
+endif
+
+
 ./build/$(PLATFORM)/$(CPU)/gguflib.o: ./vendor/gguf/gguflib.c ./vendor/gguf/gguflib.h
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 	$(CC) -O2 -std=$(STD) -D_POSIX_C_SOURCE=200809L $(GGUF_INC) \
@@ -59,10 +76,6 @@ fetch:
 	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/bf16.h    > ./vendor/gguf/bf16.h
 	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/LICENSE   > ./vendor/gguf/LICENSE
 
-run:
-	 ./build/$(PLATFORM)/$(CPU)/$(APP).debug \
-		/tenlib/common.lisp \
-		/tenlib/math.lisp
 
 build: $(GGUF_OBJS)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
@@ -81,11 +94,15 @@ test: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/test_main.c \
+		$(BLAS_CFLAGS) \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
+		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c \
+		./src/test_main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
+		$(BLAS_LDFLAGS) \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm
 
 	./build/$(PLATFORM)/$(CPU)/$(APP).test
@@ -95,9 +112,12 @@ release_cli: $(GGUF_OBJS)
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
+		$(BLAS_CFLAGS) \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
+		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
+		$(BLAS_LDFLAGS) \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm

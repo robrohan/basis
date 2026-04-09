@@ -1,27 +1,32 @@
 ---
 
 kanban-plugin: board
+legend:
+- 🪲 Bug with current state
+- 📢 Feature to add soon
+- 🔮 Future Feature (more discussion)
 
 ---
 
 ## 🧊 Backlog
 
-- [ ] Replace gc_core() bump-reset with proper mark-sweep: mark phase traverses all values reachable from env (and explicit GC roots), sweep/compact phase slides live cons cells down and fixes up all CONS/CLOS ordinals via a forwarding table — enables safe gc() calls mid-computation and fixes kb-infer exhaustion on large KBs
-- [ ] tinylisp has no TCO and evlis/eval/apply are deeply mutually recursive — GPT-2 forward pass exhausts the default C stack; fix by adding tail-call trampolining or iterative eval, or at minimum detect stack depth and error gracefully instead of SIGBUS
-- [ ] Add string primitives: (string-length s) using s8.len for rune count, (string-ref s i) for rune at index, (string-append s1 s2) — use S()/free_S() around operations that need rune-aware counting, raw bytes for storage
-- [ ] Add (princ x) primitive following Common Lisp conventions: human-readable output without escapes (for strings, print bytes without surrounding quotes)
-- [ ] Add (defun name (args) "docstring" body) following Emacs Lisp convention: sugar for (define name (lambda (args) body)) with the docstring stored on the binding so (doc name) can retrieve it; depends on string literals being implemented first
-- [ ] car and cdr don't seem to work with tensors
-- [ ] Format output of a matrix in a way that is easier to read, but still conforms to homoiconicity
-- [ ] (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error
-- [ ] Example of making a long running service
-- [ ] More compelling REPL using r2_termui.h
-- [ ] KB tensor properties: storing tensors in KB facts requires a helper like (fact s p o) since quote prevents tensor literal evaluation — (fact 'car 'bbox [2.0 1.5 4.5]) works but is ugly; proper fix is a (triple s p o) builtin or quasiquote/unquote support
-- [ ] Add (unify p1 p2) for bidirectional pattern matching: finds substitutions that make two terms equal, both terms can contain variables; needed for theorem proving and constraint solving beyond one-directional match
-- [ ] Build kb.lisp standard library: kb-assert, kb-retract, kb-query (filter by match), kb-infer (transitive is-a chain walking) — all Lisp on top of match primitive
-- [ ] Neurosymbolic demo: knowledge base with physical properties (mass, bounding box as tensors) alongside is-a/has-a facts; query KB for object properties, combine with tensor ops for similarity
-- [ ] Very simple physics world model: mass ratio crush check, bounding sphere overlap, a handful of rules (crush/bounce/slide); designed to answer LLM-posed questions like "what happens if X hits Y"; depends on KB and match being solid first
-- [ ] Batched training: parallelize train-epoch across CPU cores — each example is independent, spawn N threads each running train-one on a subset, accumulate gradients, single weight update step; revisit if project moves beyond research POC
+- [ ] 📢 Add string primitives: (string-length s) using s8.len for rune count, (string-ref s i) for rune at index, (string-append s1 s2) — use S()/free_S() around operations that need rune-aware counting, raw bytes for storage
+- [ ] 📢 add https://github.com/kokke/tiny-regex-c regex support (see test_logs.lisp for example implementation)
+- [ ] 📢 add https://github.com/json-parser/json-parser json reading support
+- [ ] 🔮 Replace gc_core() bump-reset with proper mark-sweep: mark phase traverses all values reachable from env (and explicit GC roots), sweep/compact phase slides live cons cells down and fixes up all CONS/CLOS ordinals via a forwarding table — enables safe gc() calls mid-computation and fixes kb-infer exhaustion on large KBs
+- [ ] 🪲 tinylisp has no TCO and evlis/eval/apply are deeply mutually recursive — GPT-2 forward pass exhausts the default C stack; fix by adding tail-call trampolining or iterative eval, or at minimum detect stack depth and error gracefully instead of SIGBUS
+- [ ] 📢 Add (princ x) primitive following Common Lisp conventions: human-readable output without escapes (for strings, print bytes without surrounding quotes)
+- [ ] 📢 Add (defun name (args) "docstring" body) following Emacs Lisp convention: sugar for (define name (lambda (args) body)) with the docstring stored on the binding so (doc name) can retrieve it; depends on string literals being implemented first
+- [ ] 📢 Better error messages somehow 
+- [ ] 🪲 car and cdr don't seem to work with tensors - first and rest do, maybe just call those if someone passes a tensor to car or cdr?
+- [ ] 🪲 (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error (needs better error handling)
+- [ ] 📢 More compelling REPL using r2_termui.h, up arrow for last line, secondary cursor for continued lines, ? lists all possible functions.
+- [ ] 📢 KB tensor properties: storing tensors in KB facts requires a helper like (fact s p o) since quote prevents tensor literal evaluation — (fact 'car 'bbox [2.0 1.5 4.5]) works but is ugly; proper fix is a (triple s p o) builtin or quasiquote/unquote support
+- [ ] 📢 Add (unify p1 p2) for bidirectional pattern matching: finds substitutions that make two terms equal, both terms can contain variables; needed for theorem proving and constraint solving beyond one-directional match
+- [ ] 📢 Neurosymbolic demo: knowledge base with physical properties (mass, bounding box as tensors) alongside is-a/has-a facts; query KB for object properties, combine with tensor ops for similarity
+- [ ] 🔮 Proxy server with rules engine (see ./docs/idea_server.md)
+- [ ] 🔮 Very simple physics world model: mass ratio crush check, bounding sphere overlap, a handful of rules (crush/bounce/slide); designed to answer LLM-posed questions like "what happens if X hits Y"; depends on KB and match being solid first
+- [ ] 🔮 Batched training: parallelize train-epoch across CPU cores — each example is independent, spawn N threads each running train-one on a subset, accumulate gradients, single weight update step; revisit if project moves beyond research POC
 
 
 ## 📝 Todo
