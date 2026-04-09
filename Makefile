@@ -130,3 +130,9 @@ release_cli: $(GGUF_OBJS)
 		$(GGUF_INC) \
 		$(BLAS_LDFLAGS) \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm
+
+ifeq ($(PLATFORM), Darwin)
+	otool -L ./build/$(PLATFORM)/$(CPU)/$(APP)
+else
+	ldd ./build/$(PLATFORM)/$(CPU)/$(APP)
+endif
