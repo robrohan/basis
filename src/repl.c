@@ -40,6 +40,7 @@ void repl(lisp_state_t *s)
         printf(ESC_SET_ATTRIBUTE_MODE_1, 33);   /* yellow */
         printf("[%06x]", s->th);
         printf(ESC_SET_ATTRIBUTE_MODE_1, 0);    /* reset  */
+        printf("\n");
         fflush(stdout);
         char *line = readline("> ");
         if (!line) { printf("\n"); break; }   /* Ctrl+D — exit cleanly */
