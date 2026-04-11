@@ -7,12 +7,12 @@
 #include <string.h>
 
 /* allocate a tensor from the pool, copying shape and data */
-tensor_t *alloc_tensor(II rank, const II *shape, II len, const float *data)
+tensor_t *alloc_tensor(lisp_state_t *s, II rank, const II *shape, II len, const float *data)
 {
     II i;
-    if (th >= MAX_TENSORS)
+    if (s->th >= MAX_TENSORS)
         abort();
-    tensor_t *t = &tensor_heap[th++];
+    tensor_t *t = &s->tensor_heap[s->th++];
     t->rank = rank;
     t->len = len;
     for (i = 0; i < rank; i++)
@@ -30,16 +30,16 @@ tensor_t *alloc_tensor(II rank, const II *shape, II len, const float *data)
 }
 
 /* helper: apply a scalar op element-wise, or tensor+tensor, returning new tensor */
-L tens_binop(L a, L b, char op)
+L tens_binop(lisp_state_t *s, L a, L b, char op)
 {
     II i;
     if (T(a) == TENS)
     {
-        tensor_t *ta = &tensor_heap[ord(a)];
-        tensor_t *out = alloc_tensor(ta->rank, ta->shape, ta->len, NULL);
+        tensor_t *ta = &s->tensor_heap[ord(a)];
+        tensor_t *out = alloc_tensor(s, ta->rank, ta->shape, ta->len, NULL);
         if (T(b) == TENS)
         {
-            tensor_t *tb = &tensor_heap[ord(b)];
+            tensor_t *tb = &s->tensor_heap[ord(b)];
             /* row broadcast: (rows x cols) OP (cols,) — add/scale a bias vector
                across every row.  Handles e.g. (@ x W) + bias. */
             if (ta->rank == 2 && tb->rank == 1 && ta->shape[1] == tb->len) {
@@ -52,7 +52,7 @@ L tens_binop(L a, L b, char op)
                     case '/': out->data[i] = ta->data[i] / tb->data[i % cols]; break;
                     }
                 }
-                return box(TENS, (II)(out - tensor_heap));
+                return box(TENS, (II)(out - s->tensor_heap));
             }
             for (i = 0; i < ta->len; i++)
             {
@@ -75,53 +75,53 @@ L tens_binop(L a, L b, char op)
         }
         else
         {
-            float s = (float)b;
+            float scalar = (float)b;
             for (i = 0; i < ta->len; i++)
             {
                 switch (op)
                 {
                 case '+':
-                    out->data[i] = ta->data[i] + s;
+                    out->data[i] = ta->data[i] + scalar;
                     break;
                 case '-':
-                    out->data[i] = ta->data[i] - s;
+                    out->data[i] = ta->data[i] - scalar;
                     break;
                 case '*':
-                    out->data[i] = ta->data[i] * s;
+                    out->data[i] = ta->data[i] * scalar;
                     break;
                 case '/':
-                    out->data[i] = ta->data[i] / s;
+                    out->data[i] = ta->data[i] / scalar;
                     break;
                 }
             }
         }
-        return box(TENS, (II)(out - tensor_heap));
+        return box(TENS, (II)(out - s->tensor_heap));
     }
     /* scalar op tensor: broadcast scalar on left */
     if (T(b) == TENS)
     {
-        tensor_t *tb = &tensor_heap[ord(b)];
-        tensor_t *out = alloc_tensor(tb->rank, tb->shape, tb->len, NULL);
-        float s = (float)a;
+        tensor_t *tb = &s->tensor_heap[ord(b)];
+        tensor_t *out = alloc_tensor(s, tb->rank, tb->shape, tb->len, NULL);
+        float scalar = (float)a;
         for (i = 0; i < tb->len; i++)
         {
             switch (op)
             {
             case '+':
-                out->data[i] = s + tb->data[i];
+                out->data[i] = scalar + tb->data[i];
                 break;
             case '-':
-                out->data[i] = s - tb->data[i];
+                out->data[i] = scalar - tb->data[i];
                 break;
             case '*':
-                out->data[i] = s * tb->data[i];
+                out->data[i] = scalar * tb->data[i];
                 break;
             case '/':
-                out->data[i] = s / tb->data[i];
+                out->data[i] = scalar / tb->data[i];
                 break;
             }
         }
-        return box(TENS, (II)(out - tensor_heap));
+        return box(TENS, (II)(out - s->tensor_heap));
     }
     /* both scalar */
     switch (op)
@@ -135,50 +135,50 @@ L tens_binop(L a, L b, char op)
     case '/':
         return a / b;
     }
-    return l_err;
+    return s->l_err;
 }
 
 /* if x is a stored s-expression (CONS), evaluate it fully before use.
    this lets quoted expressions like q='(+ 1 2) be used directly in
    arithmetic and tensor literals, including deeply nested cases. */
-static L resolve(L x, L e)
+static L resolve(lisp_state_t *s, L x, L e)
 {
-    return T(x) == CONS ? eval(x, e) : x;
+    return T(x) == CONS ? eval(s, x, e) : x;
 }
 
-static L f_add(L t, L e)
+static L f_add(lisp_state_t *s, L t, L e)
 {
-    t = evlis(t, e);
-    L n = resolve(car(t), e);
-    while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, resolve(car(t), e), '+');
+    t = evlis(s, t, e);
+    L n = resolve(s, car(s, t), e);
+    while (!is_nil(s, t = cdr(s, t)))
+        n = tens_binop(s, n, resolve(s, car(s, t), e), '+');
     return num(n);
 }
 
-static L f_sub(L t, L e)
+static L f_sub(lisp_state_t *s, L t, L e)
 {
-    t = evlis(t, e);
-    L n = resolve(car(t), e);
-    while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, resolve(car(t), e), '-');
+    t = evlis(s, t, e);
+    L n = resolve(s, car(s, t), e);
+    while (!is_nil(s, t = cdr(s, t)))
+        n = tens_binop(s, n, resolve(s, car(s, t), e), '-');
     return num(n);
 }
 
-static L f_mul(L t, L e)
+static L f_mul(lisp_state_t *s, L t, L e)
 {
-    t = evlis(t, e);
-    L n = resolve(car(t), e);
-    while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, resolve(car(t), e), '*');
+    t = evlis(s, t, e);
+    L n = resolve(s, car(s, t), e);
+    while (!is_nil(s, t = cdr(s, t)))
+        n = tens_binop(s, n, resolve(s, car(s, t), e), '*');
     return num(n);
 }
 
-static L f_div(L t, L e)
+static L f_div(lisp_state_t *s, L t, L e)
 {
-    t = evlis(t, e);
-    L n = resolve(car(t), e);
-    while (!is_nil(t = cdr(t)))
-        n = tens_binop(n, resolve(car(t), e), '/');
+    t = evlis(s, t, e);
+    L n = resolve(s, car(s, t), e);
+    while (!is_nil(s, t = cdr(s, t)))
+        n = tens_binop(s, n, resolve(s, car(s, t), e), '/');
     return num(n);
 }
 
@@ -190,27 +190,27 @@ static L f_div(L t, L e)
 
 /* dispatch unary tensor→tensor: vec2/vec4 fast path, else vecn_* */
 #define TENS_UNARY_DISP(fn2, fn4, fnn)                                                                                 \
-    L x = car(evlis(t, e));                                                                                            \
+    L x = car(s, evlis(s, t, e));                                                                                            \
     if (T(x) != TENS)                                                                                                  \
-        return l_err;                                                                                                    \
-    tensor_t *a = &tensor_heap[ord(x)];                                                                                \
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);                                                     \
+        return s->l_err;                                                                                                    \
+    tensor_t *a = &s->tensor_heap[ord(x)];                                                                                \
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);                                                     \
     if (a->len == 2)                                                                                                   \
         fn2((const vec2 *)a->data, (vec2 *)out->data);                                                                 \
     else if (a->len == 4)                                                                                              \
         fn4((const vec4 *)a->data, (vec4 *)out->data);                                                                 \
     else                                                                                                               \
         fnn(a->data, a->len, out->data);                                                                               \
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 
 /* dispatch binary tensor→scalar: vec2/vec4 fast path, else vecn_* */
 #define TENS_BINARY_SCALAR_DISP(fn2, fn4, fnn)                                                                         \
-    t = evlis(t, e);                                                                                                   \
-    L xa = car(t), xb = car(cdr(t));                                                                                   \
+    t = evlis(s, t, e);                                                                                                   \
+    L xa = car(s, t), xb = car(s, cdr(s, t));                                                                                   \
     if (T(xa) != TENS || T(xb) != TENS)                                                                                \
-        return l_err;                                                                                                    \
-    tensor_t *a = &tensor_heap[ord(xa)];                                                                               \
-    tensor_t *b = &tensor_heap[ord(xb)];                                                                               \
+        return s->l_err;                                                                                                    \
+    tensor_t *a = &s->tensor_heap[ord(xa)];                                                                               \
+    tensor_t *b = &s->tensor_heap[ord(xb)];                                                                               \
     if (a->len == 2)                                                                                                   \
         return (L)fn2((const vec2 *)a->data, (const vec2 *)b->data);                                                   \
     else if (a->len == 4)                                                                                              \
@@ -220,10 +220,10 @@ static L f_div(L t, L e)
 
 /* dispatch unary tensor→scalar: vec2/vec4 fast path, else vecn_* */
 #define TENS_UNARY_SCALAR_DISP(fn2, fn4, fnn)                                                                          \
-    L x = car(evlis(t, e));                                                                                            \
+    L x = car(s, evlis(s, t, e));                                                                                            \
     if (T(x) != TENS)                                                                                                  \
-        return l_err;                                                                                                    \
-    tensor_t *a = &tensor_heap[ord(x)];                                                                                \
+        return s->l_err;                                                                                                    \
+    tensor_t *a = &s->tensor_heap[ord(x)];                                                                                \
     if (a->len == 2)                                                                                                   \
         return (L)fn2((const vec2 *)a->data);                                                                          \
     else if (a->len == 4)                                                                                              \
@@ -232,41 +232,41 @@ static L f_div(L t, L e)
         return (L)fnn(a->data, (int)a->len);
 
 /* (shape t) -> rank-1 tensor of dimension sizes */
-static L f_shape(L t, L e)
+static L f_shape(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     if (T(x) != TENS)
-        return l_err;
-    tensor_t *tens = &tensor_heap[ord(x)];
+        return s->l_err;
+    tensor_t *tens = &s->tensor_heap[ord(x)];
     float sd[MAX_RANK];
-    II i, s[1];
+    II i, sh[1];
     for (i = 0; i < tens->rank; i++)
         sd[i] = (float)tens->shape[i];
-    s[0] = tens->rank;
-    return box(TENS, (II)(alloc_tensor(1, s, tens->rank, sd) - tensor_heap));
+    sh[0] = tens->rank;
+    return box(TENS, (II)(alloc_tensor(s, 1, sh, tens->rank, sd) - s->tensor_heap));
 }
 
 /* (rank t) -> scalar; returns 0 for plain numbers (rank-0 scalars) */
-static L f_rank(L t, L e)
+static L f_rank(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     if (T(x) != TENS) return 0.0;
-    return (L)tensor_heap[ord(x)].rank;
+    return (L)s->tensor_heap[ord(x)].rank;
 }
 
 /* (slice t i) -> element (scalar) or sub-tensor (row) at index i along axis 0 */
-static L f_slice(L t, L e)
+static L f_slice(lisp_state_t *s, L t, L e)
 {
     II i;
-    t = evlis(t, e);
-    L x = car(t);
-    L idx = car(cdr(t));
+    t = evlis(s, t, e);
+    L x = car(s, t);
+    L idx = car(s, cdr(s, t));
     if (T(x) != TENS)
-        return l_err;
-    tensor_t *tens = &tensor_heap[ord(x)];
+        return s->l_err;
+    tensor_t *tens = &s->tensor_heap[ord(x)];
     i = (II)idx;
     if (i >= tens->shape[0])
-        return l_err;
+        return s->l_err;
     if (tens->rank == 1)
         return (L)tens->data[i];
     /* return a row as a sub-tensor */
@@ -275,16 +275,16 @@ static L f_slice(L t, L e)
     II r;
     for (r = 0; r < tens->rank - 1; r++)
         sh[r] = tens->shape[r + 1];
-    return box(TENS, (II)(alloc_tensor(tens->rank - 1, sh, row, tens->data + i * row) - tensor_heap));
+    return box(TENS, (II)(alloc_tensor(s, tens->rank - 1, sh, row, tens->data + i * row) - s->tensor_heap));
 }
 
 /* (first t) -> first element or row (sugar for slice 0); CL-style name */
-static L f_head(L t, L e)
+static L f_head(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     if (T(x) != TENS)
-        return l_err;
-    tensor_t *tens = &tensor_heap[ord(x)];
+        return s->l_err;
+    tensor_t *tens = &s->tensor_heap[ord(x)];
     if (tens->rank == 1)
         return (L)tens->data[0];
     II row = tens->len / tens->shape[0];
@@ -292,18 +292,18 @@ static L f_head(L t, L e)
     II i;
     for (i = 0; i < tens->rank - 1; i++)
         sh[i] = tens->shape[i + 1];
-    return box(TENS, (II)(alloc_tensor(tens->rank - 1, sh, row, tens->data) - tensor_heap));
+    return box(TENS, (II)(alloc_tensor(s, tens->rank - 1, sh, row, tens->data) - s->tensor_heap));
 }
 
 /* (rest t) -> all elements after the first (rank-1: subvector, rank-2: submatrix); CL-style name */
-static L f_tail(L t, L e)
+static L f_tail(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     if (T(x) != TENS)
-        return l_err;
-    tensor_t *tens = &tensor_heap[ord(x)];
+        return s->l_err;
+    tensor_t *tens = &s->tensor_heap[ord(x)];
     if (tens->shape[0] < 2)
-        return l_err;
+        return s->l_err;
     II sh[MAX_RANK];
     II i;
     for (i = 0; i < tens->rank; i++)
@@ -311,34 +311,34 @@ static L f_tail(L t, L e)
     sh[0] = tens->shape[0] - 1;
     II row = tens->len / tens->shape[0];
     II new_len = sh[0] * row;
-    return box(TENS, (II)(alloc_tensor(tens->rank, sh, new_len, tens->data + row) - tensor_heap));
+    return box(TENS, (II)(alloc_tensor(s, tens->rank, sh, new_len, tens->data + row) - s->tensor_heap));
 }
 
 /* (tensorp x) -> #t if x is a tensor; CL predicate naming convention */
-static L f_tensor_p(L t, L e)
+static L f_tensor_p(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
-    return T(x) == TENS ? l_tru : l_nil;
+    L x = car(s, evlis(s, t, e));
+    return T(x) == TENS ? s->l_tru : s->l_nil;
 }
 
 
 /* (matmul A B) / (@ A B) — matrix product */
-static L f_matmul(L t, L e)
+static L f_matmul(lisp_state_t *s, L t, L e)
 {
-    t = evlis(t, e);
-    L xa = car(t);
-    L xb = car(cdr(t));
+    t = evlis(s, t, e);
+    L xa = car(s, t);
+    L xb = car(s, cdr(s, t));
     if (T(xa) != TENS || T(xb) != TENS)
-        return l_err;
-    tensor_t *a = &tensor_heap[ord(xa)];
-    tensor_t *b = &tensor_heap[ord(xb)];
+        return s->l_err;
+    tensor_t *a = &s->tensor_heap[ord(xa)];
+    tensor_t *b = &s->tensor_heap[ord(xb)];
 
     II r1 = (a->rank == 1) ? 1 : a->shape[0];
     II c1 = (a->rank == 1) ? a->len : a->shape[1];
     II r2 = (b->rank == 2) ? b->shape[0] : b->len;
     II c2 = (b->rank == 2) ? b->shape[1] : 1;
     if (c1 != r2)
-        return l_err;
+        return s->l_err;
 
     II out_len = r1 * c2;
     float *out_data = malloc(out_len * sizeof(float));
@@ -356,28 +356,28 @@ static L f_matmul(L t, L e)
         II len = (a->rank == 1) ? c2 : r1;
         II sh[1];
         sh[0] = len;
-        result = box(TENS, (II)(alloc_tensor(1, sh, len, out_data) - tensor_heap));
+        result = box(TENS, (II)(alloc_tensor(s, 1, sh, len, out_data) - s->tensor_heap));
     }
     else
     {
         II sh[2];
         sh[0] = r1;
         sh[1] = c2;
-        result = box(TENS, (II)(alloc_tensor(2, sh, out_len, out_data) - tensor_heap));
+        result = box(TENS, (II)(alloc_tensor(s, 2, sh, out_len, out_data) - s->tensor_heap));
     }
     free(out_data);
     return result;
 }
 
 /* (transpose M) -> rank-2 tensor with rows and columns swapped */
-static L f_transpose(L t, L e)
+static L f_transpose(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     if (T(x) != TENS)
-        return l_err;
-    tensor_t *a = &tensor_heap[ord(x)];
+        return s->l_err;
+    tensor_t *a = &s->tensor_heap[ord(x)];
     if (a->rank != 2)
-        return l_err;
+        return s->l_err;
     II r = a->shape[0], c = a->shape[1];
     float *out = malloc(r * c * sizeof(float));
     if (!out)
@@ -386,111 +386,111 @@ static L f_transpose(L t, L e)
     II sh[2];
     sh[0] = c;
     sh[1] = r;
-    L result = box(TENS, (II)(alloc_tensor(2, sh, r * c, out) - tensor_heap));
+    L result = box(TENS, (II)(alloc_tensor(s, 2, sh, r * c, out) - s->tensor_heap));
     free(out);
     return result;
 }
 
 /* (abs v) — absolute value; scalar passthrough, element-wise on tensors */
-static L f_vabs(L t, L e)
+static L f_vabs(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     if (T(x) != TENS)
         return (double)x < 0.0 ? (L)(-(double)x) : x;
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     if (a->len == 4)
         vec4_abs((const vec4 *)a->data, (vec4 *)out->data);
     else
         vecn_abs(a->data, a->len, out->data);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (sqrt v) — square root; scalar passthrough, element-wise on tensors */
-static L f_vsqrt(L t, L e)
+static L f_vsqrt(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     if (T(x) != TENS)
         return (L)sqrt((double)x);
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     if (a->len == 4)
         vec4_sqrt((const vec4 *)a->data, (vec4 *)out->data);
     else
         vecn_sqrt(a->data, a->len, out->data);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (exp x) — e^x; works on scalars and element-wise on tensors */
-static L f_exp(L t, L e)
+static L f_exp(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
     if (T(x) != TENS)
         return (L)exp((double)x);
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     for (i = 0; i < a->len; i++)
         out->data[i] = expf(a->data[i]);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (tanh x) — hyperbolic tangent; scalar or element-wise on tensors.
    Uses the C standard tanhf() which is numerically stable for all inputs. */
-static L f_tanh(L t, L e)
+static L f_tanh(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
     if (T(x) != TENS)
         return (L)tanh((double)x);
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     for (i = 0; i < a->len; i++)
         out->data[i] = tanhf(a->data[i]);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (sin x) — sine; scalar or element-wise on tensors */
-static L f_sin(L t, L e)
+static L f_sin(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
     if (T(x) != TENS)
         return (L)sin((double)x);
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     for (i = 0; i < a->len; i++)
         out->data[i] = sinf(a->data[i]);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (cos x) — cosine; scalar or element-wise on tensors */
-static L f_cos(L t, L e)
+static L f_cos(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
     if (T(x) != TENS)
         return (L)cos((double)x);
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     for (i = 0; i < a->len; i++)
         out->data[i] = cosf(a->data[i]);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (normalize v) — scale to unit length; vec2/vec4 fast paths */
-static L f_normalize(L t, L e){TENS_UNARY_DISP(vec2_normalize, vec4_normalize, vecn_normalize)}
+static L f_normalize(lisp_state_t *s, L t, L e){TENS_UNARY_DISP(vec2_normalize, vec4_normalize, vecn_normalize)}
 
 /* (pow v exp) — element-wise v^exp; vec2/vec4 fast paths */
-static L f_vpow(L t, L e)
+static L f_vpow(lisp_state_t *s, L t, L e)
 {
-    t = evlis(t, e);
-    L x = car(t);
-    L xp = car(cdr(t));
+    t = evlis(s, t, e);
+    L x = car(s, t);
+    L xp = car(s, cdr(s, t));
     if (T(x) != TENS)
-        return l_err;
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+        return s->l_err;
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     float ep = (float)xp;
     if (a->len == 2)
         vec2_pow((const vec2 *)a->data, ep, (vec2 *)out->data);
@@ -498,97 +498,97 @@ static L f_vpow(L t, L e)
         vec4_pow((const vec4 *)a->data, ep, (vec4 *)out->data);
     else
         vecn_pow(a->data, ep, a->len, out->data);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (zero n) — rank-1 tensor of n zeros */
-static L f_zero(L t, L e)
+static L f_zero(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II n = (II)x;
     II sh[1];
     sh[0] = n;
-    tensor_t *out = alloc_tensor(1, sh, n, NULL);
+    tensor_t *out = alloc_tensor(s, 1, sh, n, NULL);
     vecn_zero(out->data, (int)n);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (causal-mask n) -> (n x n) lower-triangular mask: 0.0 on/below diagonal, -1e9 above.
    Added to scores before softmax so future positions get ~zero weight. */
-static L f_causal_mask(L t, L e)
+static L f_causal_mask(lisp_state_t *s, L t, L e)
 {
     II i, j;
-    t = evlis(t, e);
-    II n = (II)(double)car(t);
-    if (n <= 0) return l_err;
+    t = evlis(s, t, e);
+    II n = (II)(double)car(s, t);
+    if (n <= 0) return s->l_err;
     II sh[2] = {n, n};
-    tensor_t *out = alloc_tensor(2, sh, n * n, NULL);
+    tensor_t *out = alloc_tensor(s, 2, sh, n * n, NULL);
     for (i = 0; i < n; i++)
         for (j = 0; j < n; j++)
             out->data[i * n + j] = (j <= i) ? 0.0f : -1e9f;
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (dot v1 v2) — dot product → scalar; vec2/vec4 fast paths */
-static L f_dot(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dot, vec4_dot, vecn_dot)}
+static L f_dot(lisp_state_t *s, L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dot, vec4_dot, vecn_dot)}
 
 /* (norm v) — Euclidean norm (length) → scalar; vec2/vec4 fast paths */
-static L f_length(L t, L e){TENS_UNARY_SCALAR_DISP(vec2_length, vec4_length, vecn_length)}
+static L f_length(lisp_state_t *s, L t, L e){TENS_UNARY_SCALAR_DISP(vec2_length, vec4_length, vecn_length)}
 
 /* (norm2 v) — norm squared (length squared) → scalar; vec2/vec4 fast paths */
-static L f_length2(L t, L e){TENS_UNARY_SCALAR_DISP(vec2_length_sqrd, vec4_length_sqrd, vecn_length_sqrd)}
+static L f_length2(lisp_state_t *s, L t, L e){TENS_UNARY_SCALAR_DISP(vec2_length_sqrd, vec4_length_sqrd, vecn_length_sqrd)}
 
 /* (length lst) — number of elements in a Lisp list, CL convention */
-static L f_list_length(L t, L e)
+static L f_list_length(lisp_state_t *s, L t, L e)
 {
-    L lst = car(evlis(t, e));
+    L lst = car(s, evlis(s, t, e));
     if (T(lst) == NIL) return 0.0;
-    if (T(lst) != CONS) return l_err;
+    if (T(lst) != CONS) return s->l_err;
     II n = 0;
-    while (T(lst) == CONS) { n++; lst = cdr(lst); }
+    while (T(lst) == CONS) { n++; lst = cdr(s, lst); }
     return (double)n;
 }
 
 /* (dist v1 v2) — Euclidean distance → scalar; vec2/vec4 fast paths */
-static L f_dist(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist, vec4_dist, vecn_dist)}
+static L f_dist(lisp_state_t *s, L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist, vec4_dist, vecn_dist)}
 
 /* (dist2 v1 v2) — distance squared -> scalar; vec2/vec4 fast paths */
-static L f_dist2(L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist_sqrd, vec4_dist_sqrd, vecn_dist_sqrd)}
+static L f_dist2(lisp_state_t *s, L t, L e){TENS_BINARY_SCALAR_DISP(vec2_dist_sqrd, vec4_dist_sqrd, vecn_dist_sqrd)}
 
 /* (sum x) -> sum of all elements as scalar; scalar passthrough */
-static L f_sum(L t, L e)
+static L f_sum(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
     if (T(x) != TENS) return x;
-    tensor_t *a = &tensor_heap[ord(x)];
-    double s = 0.0;
-    for (i = 0; i < a->len; i++) s += (double)a->data[i];
-    return (L)s;
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    double acc = 0.0;
+    for (i = 0; i < a->len; i++) acc += (double)a->data[i];
+    return (L)acc;
 }
 
 /* (amax x) -> maximum element as scalar; scalar passthrough */
-static L f_amax(L t, L e)
+static L f_amax(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
     if (T(x) != TENS) return x;
-    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *a = &s->tensor_heap[ord(x)];
     float m = a->data[0];
     for (i = 1; i < a->len; i++) if (a->data[i] > m) m = a->data[i];
     return (L)(double)m;
 }
 
 /* (log x) -> element-wise natural log; scalar passthrough */
-static L f_log(L t, L e)
+static L f_log(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
     if (T(x) != TENS) return (L)log((double)x);
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, NULL);
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, NULL);
     for (i = 0; i < a->len; i++) out->data[i] = logf(a->data[i]);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* numerically-stable softmax applied in-place to float[n] */
@@ -602,13 +602,13 @@ static void softmax_vec(float *v, II n)
 }
 
 /* (softmax x) -> rank-1: vector softmax; rank-2: row-wise softmax */
-static L f_softmax(L t, L e)
+static L f_softmax(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i;
-    if (T(x) != TENS) return l_err;
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, a->data);
+    if (T(x) != TENS) return s->l_err;
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, a->data);
     if (a->rank == 1) {
         softmax_vec(out->data, out->len);
     } else if (a->rank == 2) {
@@ -616,9 +616,9 @@ static L f_softmax(L t, L e)
         for (i = 0; i < a->shape[0]; i++)
             softmax_vec(out->data + i * cols, cols);
     } else {
-        return l_err;
+        return s->l_err;
     }
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* layer normalization applied in-place to float[n] with epsilon eps */
@@ -635,15 +635,15 @@ static void layernorm_vec(float *v, II n, float eps)
 }
 
 /* (layer-norm x eps) -> rank-1: single LN; rank-2: per-row LN (one token per row) */
-static L f_layer_norm(L t, L e)
+static L f_layer_norm(lisp_state_t *s, L t, L e)
 {
     II i;
-    t = evlis(t, e);
-    L x = car(t);
-    float eps = (float)(double)car(cdr(t));
-    if (T(x) != TENS) return l_err;
-    tensor_t *a = &tensor_heap[ord(x)];
-    tensor_t *out = alloc_tensor(a->rank, a->shape, a->len, a->data);
+    t = evlis(s, t, e);
+    L x = car(s, t);
+    float eps = (float)(double)car(s, cdr(s, t));
+    if (T(x) != TENS) return s->l_err;
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    tensor_t *out = alloc_tensor(s, a->rank, a->shape, a->len, a->data);
     if (a->rank == 1) {
         layernorm_vec(out->data, out->len, eps);
     } else if (a->rank == 2) {
@@ -651,89 +651,89 @@ static L f_layer_norm(L t, L e)
         for (i = 0; i < a->shape[0]; i++)
             layernorm_vec(out->data + i * cols, cols, eps);
     } else {
-        return l_err;
+        return s->l_err;
     }
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (reshape x [d0 d1 ...]) -> new tensor with same data but different shape.
    Total element count must match.  Useful for e.g. turning a flat vector into
    a 2-D matrix: (reshape v [1 768]) */
-static L f_reshape(L t, L e)
+static L f_reshape(lisp_state_t *s, L t, L e)
 {
     II i;
-    t = evlis(t, e);
-    L x   = car(t);
-    L shp = car(cdr(t));
-    if (T(x) != TENS || T(shp) != TENS) return l_err;
-    tensor_t *src = &tensor_heap[ord(x)];
-    tensor_t *sv  = &tensor_heap[ord(shp)];
+    t = evlis(s, t, e);
+    L x   = car(s, t);
+    L shp = car(s, cdr(s, t));
+    if (T(x) != TENS || T(shp) != TENS) return s->l_err;
+    tensor_t *src = &s->tensor_heap[ord(x)];
+    tensor_t *sv  = &s->tensor_heap[ord(shp)];
     II new_rank = sv->len;
-    if (new_rank > MAX_RANK) return l_err;
+    if (new_rank > MAX_RANK) return s->l_err;
     II new_shape[MAX_RANK];
     II new_len = 1;
     for (i = 0; i < new_rank; i++) {
         new_shape[i] = (II)sv->data[i];
         new_len *= new_shape[i];
     }
-    if (new_len != src->len) return l_err;
-    return box(TENS, (II)(alloc_tensor(new_rank, new_shape, src->len, src->data) - tensor_heap));
+    if (new_len != src->len) return s->l_err;
+    return box(TENS, (II)(alloc_tensor(s, new_rank, new_shape, src->len, src->data) - s->tensor_heap));
 }
 
 /* (slice-range x start end) -> rows (or elements) in [start, end).
    Works on rank-1 (element range) and rank-2 (row range). */
-static L f_slice_range(L t, L e)
+static L f_slice_range(lisp_state_t *s, L t, L e)
 {
     II i;
-    t = evlis(t, e);
-    L x     = car(t);
-    II start = (II)(double)car(cdr(t));
-    II end   = (II)(double)car(cdr(cdr(t)));
-    if (T(x) != TENS || start >= end) return l_err;
-    tensor_t *a = &tensor_heap[ord(x)];
-    if (end > a->shape[0]) return l_err;
+    t = evlis(s, t, e);
+    L x     = car(s, t);
+    II start = (II)(double)car(s, cdr(s, t));
+    II end   = (II)(double)car(s, cdr(s, cdr(s, t)));
+    if (T(x) != TENS || start >= end) return s->l_err;
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    if (end > a->shape[0]) return s->l_err;
     II n = end - start;
     if (a->rank == 1) {
         II sh[1]; sh[0] = n;
-        return box(TENS, (II)(alloc_tensor(1, sh, n, a->data + start) - tensor_heap));
+        return box(TENS, (II)(alloc_tensor(s, 1, sh, n, a->data + start) - s->tensor_heap));
     }
     II row = a->len / a->shape[0];
     II sh[MAX_RANK];
     sh[0] = n;
     for (i = 1; i < a->rank; i++) sh[i] = a->shape[i];
-    return box(TENS, (II)(alloc_tensor(a->rank, sh, n * row, a->data + start * row) - tensor_heap));
+    return box(TENS, (II)(alloc_tensor(s, a->rank, sh, n * row, a->data + start * row) - s->tensor_heap));
 }
 
 /* (col-slice M j) -> extract column j of a rank-2 matrix as a rank-1 vector.
    Avoids allocating the full transposed matrix for single-column lookups
    (e.g. embedding table lookups). */
-static L f_col_slice(L t, L e)
+static L f_col_slice(lisp_state_t *s, L t, L e)
 {
     II i;
-    t = evlis(t, e);
-    L x = car(t);
-    II j = (II)(double)car(cdr(t));
-    if (T(x) != TENS) return l_err;
-    tensor_t *a = &tensor_heap[ord(x)];
-    if (a->rank != 2 || j >= a->shape[1]) return l_err;
+    t = evlis(s, t, e);
+    L x = car(s, t);
+    II j = (II)(double)car(s, cdr(s, t));
+    if (T(x) != TENS) return s->l_err;
+    tensor_t *a = &s->tensor_heap[ord(x)];
+    if (a->rank != 2 || j >= a->shape[1]) return s->l_err;
     II rows = a->shape[0], cols = a->shape[1];
     float *buf = malloc(rows * sizeof(float));
     if (!buf) abort();
     for (i = 0; i < rows; i++) buf[i] = a->data[i * cols + j];
     II sh[1]; sh[0] = rows;
-    tensor_t *out = alloc_tensor(1, sh, rows, buf);
+    tensor_t *out = alloc_tensor(s, 1, sh, rows, buf);
     free(buf);
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (argmax x) -> index of the maximum element (integer scalar).
    For rank-2, scans all elements and returns the flat index. */
-static L f_argmax(L t, L e)
+static L f_argmax(lisp_state_t *s, L t, L e)
 {
-    L x = car(evlis(t, e));
+    L x = car(s, evlis(s, t, e));
     II i, best = 0;
     if (T(x) != TENS) return (L)0.0;
-    tensor_t *a = &tensor_heap[ord(x)];
+    tensor_t *a = &s->tensor_heap[ord(x)];
     for (i = 1; i < a->len; i++)
         if (a->data[i] > a->data[best]) best = i;
     return (L)(double)best;
@@ -751,47 +751,47 @@ int tensor_equal(const tensor_t *a, const tensor_t *b)
 }
 
 /* (equalp v1 v2) — element-wise equality -> #t or (); CL equalp does array comparison */
-static L f_veq(L t, L e)
+static L f_veq(lisp_state_t *s, L t, L e)
 {
-    t = evlis(t, e);
-    L xa = car(t), xb = car(cdr(t));
+    t = evlis(s, t, e);
+    L xa = car(s, t), xb = car(s, cdr(s, t));
     if (T(xa) != TENS || T(xb) != TENS)
-        return l_err;
-    return tensor_equal(&tensor_heap[ord(xa)], &tensor_heap[ord(xb)]) ? l_tru : l_nil;
+        return s->l_err;
+    return tensor_equal(&s->tensor_heap[ord(xa)], &s->tensor_heap[ord(xb)]) ? s->l_tru : s->l_nil;
 }
 
 /* (vstack A B)
    Stack tensor A on top of tensor B row-wise.
    Both must be rank-2 with equal column counts, or rank-1 (treated as 1-row).
    Returns a rank-2 tensor of shape [(rows_A + rows_B) x cols]. */
-static L f_vstack(L t, L e)
+static L f_vstack(lisp_state_t *s, L t, L e)
 {
     II i;
-    t = evlis(t, e);
-    L a = car(t), b = car(cdr(t));
-    if (T(a) != TENS || T(b) != TENS) return l_err;
-    tensor_t *ta = tensor_heap + ord(a);
-    tensor_t *tb = tensor_heap + ord(b);
+    t = evlis(s, t, e);
+    L a = car(s, t), b = car(s, cdr(s, t));
+    if (T(a) != TENS || T(b) != TENS) return s->l_err;
+    tensor_t *ta = s->tensor_heap + ord(a);
+    tensor_t *tb = s->tensor_heap + ord(b);
 
     II rows_a = ta->rank == 1 ? 1 : ta->shape[0];
     II cols_a = ta->rank == 1 ? ta->len : ta->shape[ta->rank - 1];
     II rows_b = tb->rank == 1 ? 1 : tb->shape[0];
     II cols_b = tb->rank == 1 ? tb->len : tb->shape[tb->rank - 1];
 
-    if (cols_a != cols_b) return l_err;
+    if (cols_a != cols_b) return s->l_err;
 
     II rows = rows_a + rows_b;
     II shape[2] = {rows, cols_a};
-    tensor_t *out = alloc_tensor(2, shape, rows * cols_a, NULL);
+    tensor_t *out = alloc_tensor(s, 2, shape, rows * cols_a, NULL);
     for (i = 0; i < (II)(rows_a * cols_a); i++)
         out->data[i] = ta->data[i];
     for (i = 0; i < (II)(rows_b * cols_b); i++)
         out->data[rows_a * cols_a + i] = tb->data[i];
-    return box(TENS, (II)(out - tensor_heap));
+    return box(TENS, (II)(out - s->tensor_heap));
 }
 
 /* (make-tensor e1 e2 ...) -- runtime backend for [ ] tensor literals */
-static L f_make_tensor(L t, L e)
+static L f_make_tensor(lisp_state_t *s, L t, L e)
 {
     II n, k, elem_rank, elem_len, j, m;
     II new_shape[MAX_RANK];
@@ -799,33 +799,33 @@ static L f_make_tensor(L t, L e)
     tensor_t *ft, *at, *out;
     L tmp, item;
 
-    t = evlis(t, e);
-    if (is_nil(t))
-        return l_err;
+    t = evlis(s, t, e);
+    if (is_nil(s, t))
+        return s->l_err;
 
-    item = car(t);
+    item = car(s, t);
 
     if (T(item) == TENS)
     {
         /* all elements must be tensors sharing the same rank and shape */
-        ft = &tensor_heap[ord(item)];
+        ft = &s->tensor_heap[ord(item)];
         elem_rank = ft->rank;
         elem_len = ft->len;
         n = 0;
         tmp = t;
-        while (!is_nil(tmp))
+        while (!is_nil(s, tmp))
         {
-            item = car(tmp);
+            item = car(s, tmp);
             if (T(item) != TENS)
-                return l_err;
-            at = &tensor_heap[ord(item)];
+                return s->l_err;
+            at = &s->tensor_heap[ord(item)];
             if (at->rank != elem_rank || at->len != elem_len)
-                return l_err;
+                return s->l_err;
             n++;
-            tmp = cdr(tmp);
+            tmp = cdr(s, tmp);
         }
         if (elem_rank + 1 > MAX_RANK)
-            return l_err;
+            return s->l_err;
         new_shape[0] = n;
         for (j = 0; j < elem_rank; j++)
             new_shape[j + 1] = ft->shape[j];
@@ -835,132 +835,132 @@ static L f_make_tensor(L t, L e)
             abort();
         k = 0;
         tmp = t;
-        while (!is_nil(tmp))
+        while (!is_nil(s, tmp))
         {
-            item = car(tmp);
-            at = &tensor_heap[ord(item)];
+            item = car(s, tmp);
+            at = &s->tensor_heap[ord(item)];
             for (m = 0; m < at->len; m++)
                 data[k++] = at->data[m];
-            tmp = cdr(tmp);
+            tmp = cdr(s, tmp);
         }
-        out = alloc_tensor(elem_rank + 1, new_shape, new_len, data);
+        out = alloc_tensor(s, elem_rank + 1, new_shape, new_len, data);
         free(data);
-        return box(TENS, (II)(out - tensor_heap));
+        return box(TENS, (II)(out - s->tensor_heap));
     }
     else
     {
         /* all elements must be scalars */
         n = 0;
         tmp = t;
-        while (!is_nil(tmp))
+        while (!is_nil(s, tmp))
         {
-            item = car(tmp);
+            item = car(s, tmp);
             if (T(item) == TENS)
-                return l_err;
+                return s->l_err;
             n++;
-            tmp = cdr(tmp);
+            tmp = cdr(s, tmp);
         }
         data = malloc(n * sizeof(float));
         if (!data)
             abort();
         k = 0;
         tmp = t;
-        while (!is_nil(tmp))
+        while (!is_nil(s, tmp))
         {
-            item = resolve(car(tmp), e);
+            item = resolve(s, car(s, tmp), e);
             data[k++] = (float)item;
-            tmp = cdr(tmp);
+            tmp = cdr(s, tmp);
         }
         new_shape[0] = n;
-        out = alloc_tensor(1, new_shape, n, data);
+        out = alloc_tensor(s, 1, new_shape, n, data);
         free(data);
-        return box(TENS, (II)(out - tensor_heap));
+        return box(TENS, (II)(out - s->tensor_heap));
     }
 }
 
 /* gc_tensors: tensor mark/compact/patch phases */
-void gc_tensors(void)
+void gc_tensors(lisp_state_t *s)
 {
     II i;
-    if (th == 0)
+    if (s->th == 0)
         return;
     unsigned char mark[MAX_TENSORS];
-    memset(mark, 0, th);
-    for (i = sp; i < N; i++)
+    memset(mark, 0, s->th);
+    for (i = s->sp; i < N; i++)
     {
-        L v = cell[i];
-        if (T(v) == TENS && ord(v) < th)
+        L v = s->cell[i];
+        if (T(v) == TENS && ord(v) < s->th)
             mark[ord(v)] = 1;
     }
     II remap[MAX_TENSORS];
     II new_th = 0;
-    for (i = 0; i < th; i++)
+    for (i = 0; i < s->th; i++)
     {
         if (mark[i])
         {
             remap[i] = new_th;
             if (i != new_th)
-                tensor_heap[new_th] = tensor_heap[i];
+                s->tensor_heap[new_th] = s->tensor_heap[i];
             new_th++;
         }
         else
         {
-            free(tensor_heap[i].data);
-            tensor_heap[i].data = NULL;
+            free(s->tensor_heap[i].data);
+            s->tensor_heap[i].data = NULL;
         }
     }
-    for (i = sp; i < N; i++)
+    for (i = s->sp; i < N; i++)
     {
-        L v = cell[i];
-        if (T(v) == TENS && ord(v) < th)
-            cell[i] = box(TENS, remap[ord(v)]);
+        L v = s->cell[i];
+        if (T(v) == TENS && ord(v) < s->th)
+            s->cell[i] = box(TENS, remap[ord(v)]);
     }
-    th = new_th;
+    s->th = new_th;
 }
 
-/* register all tensor primitives into the global prim[] table */
-void register_tensor_prims(void)
+/* register all tensor primitives into the instance prim[] table */
+void register_tensor_prims(lisp_state_t *s)
 {
-    register_prim("+",           f_add);
-    register_prim("-",           f_sub);
-    register_prim("*",           f_mul);
-    register_prim("/",           f_div);
-    register_prim("shape",       f_shape);
-    register_prim("rank",        f_rank);
-    register_prim("slice",       f_slice);
-    register_prim("first",       f_head);
-    register_prim("rest",        f_tail);
-    register_prim("tensorp",     f_tensor_p);
-    register_prim("matmul",      f_matmul);
-    register_prim("@",           f_matmul);
-    register_prim("transpose",   f_transpose);
-    register_prim("T",           f_transpose);
-    register_prim("abs",         f_vabs);
-    register_prim("sqrt",        f_vsqrt);
-    register_prim("exp",         f_exp);
-    register_prim("tanh",        f_tanh);
-    register_prim("sin",         f_sin);
-    register_prim("cos",         f_cos);
-    register_prim("normalize",   f_normalize);
-    register_prim("pow",         f_vpow);
-    register_prim("zero",        f_zero);
-    register_prim("causal-mask", f_causal_mask);
-    register_prim("dot",         f_dot);
-    register_prim("norm",        f_length);
-    register_prim("norm2",       f_length2);
-    register_prim("dist",        f_dist);
-    register_prim("dist2",       f_dist2);
-    register_prim("equalp",      f_veq);
-    register_prim("length",      f_list_length);
-    register_prim("make-tensor", f_make_tensor);
-    register_prim("sum",         f_sum);
-    register_prim("amax",        f_amax);
-    register_prim("log",         f_log);
-    register_prim("softmax",     f_softmax);
-    register_prim("layer-norm",  f_layer_norm);
-    register_prim("reshape",     f_reshape);
-    register_prim("slice-range", f_slice_range);
-    register_prim("col-slice",   f_col_slice);
-    register_prim("argmax",      f_argmax);
-    register_prim("vstack",      f_vstack);
+    register_prim(s, "+",           f_add);
+    register_prim(s, "-",           f_sub);
+    register_prim(s, "*",           f_mul);
+    register_prim(s, "/",           f_div);
+    register_prim(s, "shape",       f_shape);
+    register_prim(s, "rank",        f_rank);
+    register_prim(s, "slice",       f_slice);
+    register_prim(s, "first",       f_head);
+    register_prim(s, "rest",        f_tail);
+    register_prim(s, "tensorp",     f_tensor_p);
+    register_prim(s, "matmul",      f_matmul);
+    register_prim(s, "@",           f_matmul);
+    register_prim(s, "transpose",   f_transpose);
+    register_prim(s, "T",           f_transpose);
+    register_prim(s, "abs",         f_vabs);
+    register_prim(s, "sqrt",        f_vsqrt);
+    register_prim(s, "exp",         f_exp);
+    register_prim(s, "tanh",        f_tanh);
+    register_prim(s, "sin",         f_sin);
+    register_prim(s, "cos",         f_cos);
+    register_prim(s, "normalize",   f_normalize);
+    register_prim(s, "pow",         f_vpow);
+    register_prim(s, "zero",        f_zero);
+    register_prim(s, "causal-mask", f_causal_mask);
+    register_prim(s, "dot",         f_dot);
+    register_prim(s, "norm",        f_length);
+    register_prim(s, "norm2",       f_length2);
+    register_prim(s, "dist",        f_dist);
+    register_prim(s, "dist2",       f_dist2);
+    register_prim(s, "equalp",      f_veq);
+    register_prim(s, "length",      f_list_length);
+    register_prim(s, "make-tensor", f_make_tensor);
+    register_prim(s, "sum",         f_sum);
+    register_prim(s, "amax",        f_amax);
+    register_prim(s, "log",         f_log);
+    register_prim(s, "softmax",     f_softmax);
+    register_prim(s, "layer-norm",  f_layer_norm);
+    register_prim(s, "reshape",     f_reshape);
+    register_prim(s, "slice-range", f_slice_range);
+    register_prim(s, "col-slice",   f_col_slice);
+    register_prim(s, "argmax",      f_argmax);
+    register_prim(s, "vstack",      f_vstack);
 }

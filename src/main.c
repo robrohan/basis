@@ -8,26 +8,26 @@
 #include <unistd.h>
 
 
-static void init(void)
+static void init(lisp_state_t *s)
 {
     II i;
-    l_nil = box(NIL, 0);
-    l_err = atom("ERR");
-    l_tru = atom("#t");
-    l_env = pair(l_tru, l_tru, l_nil);
-    register_tensor_prims();
-    register_symbolic_prims();
-    register_runtime_prims();
-    register_gguf_prims();
-    register_tokenizer_prims();
-    for (i = 0; prim[i].s; ++i)
-        l_env = pair(atom(prim[i].s), box(PRIM, i), l_env);
+    s->l_nil = box(NIL, 0);
+    s->l_err = atom(s, "ERR");
+    s->l_tru = atom(s, "#t");
+    s->l_env = pair(s, s->l_tru, s->l_tru, s->l_nil);
+    register_tensor_prims(s);
+    register_symbolic_prims(s);
+    register_runtime_prims(s);
+    register_gguf_prims(s);
+    register_tokenizer_prims(s);
+    for (i = 0; s->prim[i].s; ++i)
+        s->l_env = pair(s, atom(s, s->prim[i].s), box(PRIM, i), s->l_env);
 }
 
 /* headless file evaluation — no implicit output.
    expressions are evaluated for side-effects only; results are discarded.
    explicit (print x) calls will write to stdout when that primitive exists. */
-static int run_file(const char *path)
+static int run_file(lisp_state_t *s, const char *path)
 {
     FILE *fp = fopen(path, "r");
     if (!fp)
@@ -35,11 +35,11 @@ static int run_file(const char *path)
         fprintf(stderr, "Basis: cannot open '%s'\n", path);
         return 1;
     }
-    input_stream = fp;
-    while (scan())
+    s->input_stream = fp;
+    while (scan(s))
     {
-        eval(parse(), l_env);
-        gc();
+        eval(s, parse(s), s->l_env);
+        gc(s);
     }
     fflush(stdout);
     fclose(fp);
@@ -49,16 +49,16 @@ static int run_file(const char *path)
 /* interactive REPL — prints each result and runs GC after each expression.
    UI chrome (prompt, banner) lives here so run_file stays headless.
    future: replace with r2_termui for richer interactive experience. */
-static void repl(void)
+static void repl(lisp_state_t *s)
 {
     printf(":: Basis version %s\n", VERSION);
     printf(":: Ctrl+d to quit\n");
     while (1)
     {
-        printf("\n(%06x)[%06x]> ", sp - hp / 8, th);
+        printf("\n(%06x)[%06x]> ", s->sp - s->hp / 8, s->th);
         fflush(stdout);
-        print(eval(Read(), l_env));
-        gc();
+        print(s, eval(s, Read(s), s->l_env));
+        gc(s);
     }
 }
 
@@ -86,7 +86,10 @@ int main(int argc, char *argv[])
     if (!file && optind < argc)
         file = argv[optind];
 
-    input_stream = stdin;
-    init();
-    return file ? run_file(file) : (repl(), 0);
+    lisp_state_t *s = lisp_state_new();
+    s->input_stream = stdin;
+    init(s);
+    int ret = file ? run_file(s, file) : (repl(s), 0);
+    lisp_state_free(s);
+    return ret;
 }

@@ -84,22 +84,24 @@ A tensor literal in code is self-evaluating, just like a number. An expression `
 #### 2.2 Component Diagrams
 
 ```
-┌─────────────────────────────────────────────────┐
-│                   cell[N]                       │
-│                                                 │
-│  [0 .. hp)        atom strings (C strings)      │
-│  [hp .. sp<<3)    free                          │
-│  [sp .. N)        cons stack (grows downward)   │
-└─────────────────────────────────────────────────┘
+lisp_state_t {
+  ┌─────────────────────────────────────────────────┐
+  │                   cell[N]                       │
+  │                                                 │
+  │  [0 .. hp)        atom strings (C strings)      │
+  │  [hp .. sp<<3)    free                          │
+  │  [sp .. N)        cons stack (grows downward)   │
+  └─────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────┐
-│              tensor_heap[MAX_TENSORS]           │
-│  [0 .. th)        live tensor_t structs         │
-│  each tensor_t   -> malloc'd float* data array  │
-└─────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────┐
+  │              tensor_heap[MAX_TENSORS]           │
+  │  [0 .. th)        live tensor_t structs         │
+  │  each tensor_t   -> malloc'd float* data array  │
+  └─────────────────────────────────────────────────┘
+}
 ```
 
-The atom heap and cons stack share `cell[]`. The tensor heap is a separate fixed pool; tensor data arrays are individually `malloc`'d. Garbage collection compacts the tensor heap and resets the cons stack to `ord(env)`.
+Both heaps are fields of `lisp_state_t`. The atom heap and cons stack share `cell[]`. The tensor heap is a separate fixed pool; tensor data arrays are individually `malloc`'d. Garbage collection compacts the tensor heap and resets the cons stack to `ord(env)`. Each `lisp_state_t` instance has its own independent copy of both heaps.
 
 #### 2.3 Class Diagrams
 
@@ -115,12 +117,36 @@ typedef struct {
     float *data;          /* heap-allocated flat row-major array */
 } tensor_t;
 
+/* Forward declaration needed because struct prims references lisp_state_t */
+typedef struct lisp_state lisp_state_t;
+
 /* Primitive function entry */
 struct prims {
-    const char *s;        /* name as seen in Lisp                */
-    L (*f)(L, L);         /* C function: (arg-list, environment) */
+    const char *s;                      /* name as seen in Lisp                */
+    L (*f)(lisp_state_t *, L, L);       /* C function: (state, arg-list, env)  */
 };
+
+/* Per-instance interpreter state — all formerly-global variables */
+struct lisp_state {
+    L    cell[N];                /* shared NaN-boxed cell array              */
+    II   hp;                     /* heap pointer — grows up from 0           */
+    II   sp;                     /* stack pointer — grows down from N        */
+    L    l_nil, l_tru, l_err;    /* interpreter singletons                   */
+    L    l_env;                  /* global environment (linked alist)        */
+    char buf[256];               /* scanner token buffer                     */
+    int  see;                    /* lookahead character                      */
+    FILE *input_stream;          /* current input (stdin or loaded file)     */
+    tensor_t tensor_heap[MAX_TENSORS]; /* fixed tensor pool                  */
+    II       th;                 /* next free tensor slot                    */
+    struct prims prim[MAX_PRIMS];/* registered primitive table               */
+    int          prim_count;     /* number of registered primitives          */
+};
+
+lisp_state_t *lisp_state_new(void);   /* allocate and zero-initialise        */
+void          lisp_state_free(lisp_state_t *s); /* free tensors then struct  */
 ```
+
+Every public API function takes `lisp_state_t *s` as its first argument. This allows multiple independent interpreter instances to coexist in the same process — the intended use case is the proxy server design where model weights are loaded once into a shared read-only `universe_t` and a pool of `lisp_state_t` instances handles concurrent HTTP requests.
 
 #### 2.4 Sequence Diagrams
 
@@ -421,10 +447,10 @@ See also:
 | Rank          | The number of dimensions of a tensor (scalar=0, vector=1, matrix=2, ...)        |
 | Shape         | A vector of the sizes along each dimension, e.g. `[2 3]` for a 2×3 matrix       |
 | REPL          | Read-Eval-Print Loop — interactive interpreter mode                             |
-| `hp`          | Heap pointer — top of the atom string heap (grows upward)                       |
-| `sp`          | Stack pointer — top of the cons cell stack (grows downward from N)              |
-| `th`          | Tensor heap pointer — next free slot in `tensor_heap[]`                         |
-| `env`         | The global environment — a linked list of `(name . value)` pairs                |
+| `hp`          | `lisp_state_t` field — heap pointer, top of the atom string heap (grows upward) |
+| `sp`          | `lisp_state_t` field — stack pointer, top of the cons cell stack (grows down from N) |
+| `th`          | `lisp_state_t` field — tensor heap pointer, next free slot in `tensor_heap[]`   |
+| `env`         | `lisp_state_t` field — global environment, a linked list of `(name . value)` pairs |
 | Primitive     | A built-in function implemented in C and registered in the `prim[]` table       |
 
 #### 4.2 References

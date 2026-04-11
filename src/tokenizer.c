@@ -199,18 +199,18 @@ static void str_arr_cb(void *priv, uint32_t type, union gguf_value *val,
  * L_ERR if the file cannot be opened.
  * ============================================================ */
 
-static L f_load_gguf_vocab(L t, L e)
+static L f_load_gguf_vocab(lisp_state_t *s, L t, L e)
 {
-    L arg = car(evlis(t, e));
-    if (T(arg) != STR && T(arg) != ATOM) return l_err;
-    const char *path = A + ord(arg);
+    L arg = car(s, evlis(s, t, e));
+    if (T(arg) != STR && T(arg) != ATOM) return s->l_err;
+    const char *path = A(s) + ord(arg);
 
     init_b2u();
 
     gguf_ctx *ctx = gguf_open(path);
     if (!ctx) {
         fprintf(stderr, "load-gguf-vocab: cannot open '%s'\n", path);
-        return l_err;
+        return s->l_err;
     }
 
     /* (re-)allocate hash tables */
@@ -288,15 +288,15 @@ static L f_load_gguf_vocab(L t, L e)
  * e.g. (token->str 5868) => " a"
  * ============================================================ */
 
-static L f_token_to_str(L t, L e)
+static L f_token_to_str(lisp_state_t *s, L t, L e)
 {
-    L arg = car(evlis(t, e));
+    L arg = car(s, evlis(s, t, e));
     uint32_t id = (uint32_t)arg;
-    if (!vocab || id >= vocab_sz) return l_err;
+    if (!vocab || id >= vocab_sz) return s->l_err;
     init_b2u();
     char out[512];
     tok_decode(vocab[id], out);
-    return atom(out);
+    return atom(s, out);
 }
 
 /* ============================================================
@@ -306,16 +306,16 @@ static L f_token_to_str(L t, L e)
  * rank-1 tensor and returns the result as an atom.
  * ============================================================ */
 
-static L f_detokenize(L t, L e)
+static L f_detokenize(lisp_state_t *s, L t, L e)
 {
-    L arg = car(evlis(t, e));
-    if (T(arg) != TENS || !vocab) return l_err;
+    L arg = car(s, evlis(s, t, e));
+    if (T(arg) != TENS || !vocab) return s->l_err;
     init_b2u();
 
-    tensor_t *ta = tensor_heap + ord(arg);
+    tensor_t *ta = s->tensor_heap + ord(arg);
     /* upper bound: each token can decode to at most ~8 bytes */
     char *buf = (char *)malloc((size_t)ta->len * 8 + 1);
-    if (!buf) return l_err;
+    if (!buf) return s->l_err;
     int pos = 0;
     II i;
     for (i = 0; i < ta->len; i++) {
@@ -327,7 +327,7 @@ static L f_detokenize(L t, L e)
         pos += n;
     }
     buf[pos] = '\0';
-    L result = atom(buf);
+    L result = atom(s, buf);
     free(buf);
     return result;
 }
@@ -351,27 +351,27 @@ typedef struct bpe_node {
     struct bpe_node *prev, *next;
 } bpe_node_t;
 
-static L f_tokenize(L t, L e)
+static L f_tokenize(lisp_state_t *s, L t, L e)
 {
-    L arg = car(evlis(t, e));
-    if (T(arg) != STR && T(arg) != ATOM) return l_err;
+    L arg = car(s, evlis(s, t, e));
+    if (T(arg) != STR && T(arg) != ATOM) return s->l_err;
     if (!vocab || !rvocab || !merge_ht) {
         fprintf(stderr, "tokenize: call (load-gguf-vocab) first\n");
-        return l_err;
+        return s->l_err;
     }
     init_b2u();
 
-    const char *text = A + ord(arg);
+    const char *text = A(s) + ord(arg);
     size_t tlen = strlen(text);
     if (tlen == 0) {
         II shape[1] = {0};
-        tensor_t *bt = alloc_tensor(1, shape, 0, NULL);
-        return box(TENS, (II)(bt - tensor_heap));
+        tensor_t *bt = alloc_tensor(s, 1, shape, 0, NULL);
+        return box(TENS, (II)(bt - s->tensor_heap));
     }
 
     /* Step 1+2: one node per input byte, id = base token for that byte */
     bpe_node_t *nodes = (bpe_node_t *)malloc(tlen * sizeof(bpe_node_t));
-    if (!nodes) return l_err;
+    if (!nodes) return s->l_err;
 
     int n = 0;
     size_t i;
@@ -427,7 +427,7 @@ static L f_tokenize(L t, L e)
 
     /* Step 4: collect IDs into a float array for the tensor */
     float *ids = (float *)malloc((size_t)n * sizeof(float));
-    if (!ids) { free(nodes); return l_err; }
+    if (!ids) { free(nodes); return s->l_err; }
     int idx = 0;
     bpe_node_t *nd;
     for (nd = nodes; nd; nd = nd->next)
@@ -435,19 +435,19 @@ static L f_tokenize(L t, L e)
     free(nodes);
 
     II shape[1] = {(II)idx};
-    tensor_t *bt = alloc_tensor(1, shape, (II)idx, ids);
+    tensor_t *bt = alloc_tensor(s, 1, shape, (II)idx, ids);
     free(ids);
-    return box(TENS, (II)(bt - tensor_heap));
+    return box(TENS, (II)(bt - s->tensor_heap));
 }
 
 /* ============================================================
  * Registration
  * ============================================================ */
 
-void register_tokenizer_prims(void)
+void register_tokenizer_prims(lisp_state_t *s)
 {
-    register_prim("load-gguf-vocab", f_load_gguf_vocab);
-    register_prim("token->str",      f_token_to_str);
-    register_prim("detokenize",      f_detokenize);
-    register_prim("tokenize",        f_tokenize);
+    register_prim(s, "load-gguf-vocab", f_load_gguf_vocab);
+    register_prim(s, "token->str",      f_token_to_str);
+    register_prim(s, "detokenize",      f_detokenize);
+    register_prim(s, "tokenize",        f_tokenize);
 }

@@ -9,24 +9,24 @@
 
 int r2_tests_run = 0;
 
+/* Global test state — initialised by setup() before each test */
+static lisp_state_t *ts = NULL;
+
 /* Reset the interpreter to a clean state before each test. Calling this at
    the top of every test ensures no state leaks between tests. */
 static void setup(void)
 {
     II i;
-    hp  = 0;
-    sp  = N;
-    th  = 0;
-    prim_count = CORE_PRIM_COUNT;  /* reset to core-only, then re-register */
-    prim[CORE_PRIM_COUNT].s = 0;   /* restore sentinel */
-    l_nil = box(NIL, 0);
-    l_err = atom("L_ERR");
-    l_tru = atom("#t");
-    l_env = pair(l_tru, l_tru, l_nil);
-    register_tensor_prims();
-    register_runtime_prims();
-    for (i = 0; prim[i].s; i++)
-        l_env = pair(atom(prim[i].s), box(PRIM, i), l_env);
+    if (ts) lisp_state_free(ts);
+    ts = lisp_state_new();
+    ts->l_nil = box(NIL, 0);
+    ts->l_err = atom(ts, "L_ERR");
+    ts->l_tru = atom(ts, "#t");
+    ts->l_env = pair(ts, ts->l_tru, ts->l_tru, ts->l_nil);
+    register_tensor_prims(ts);
+    register_runtime_prims(ts);
+    for (i = 0; ts->prim[i].s; i++)
+        ts->l_env = pair(ts, atom(ts, ts->prim[i].s), box(PRIM, i), ts->l_env);
 }
 
 /* -----------------------------------------------------------------------
@@ -70,9 +70,9 @@ static const char *test_equ(void)
 static const char *test_atom_interning(void)
 {
     setup();
-    L a1 = atom("hello");
-    L a2 = atom("hello");
-    L a3 = atom("world");
+    L a1 = atom(ts, "hello");
+    L a2 = atom(ts, "hello");
+    L a3 = atom(ts, "world");
     r2_assert("same name interns to same value", equ(a1, a2));
     r2_assert("different names differ",         !equ(a1, a3));
     r2_assert("atom has ATOM tag",               T(a1) == ATOM);
@@ -82,15 +82,15 @@ static const char *test_atom_interning(void)
 static const char *test_atom_utf8(void)
 {
     setup();
-    L fire1 = atom("\xF0\x9F\x94\xA5");   /* 🔥 */
-    L fire2 = atom("\xF0\x9F\x94\xA5");   /* 🔥 same */
-    L water = atom("\xF0\x9F\x92\xA7");   /* 💧 different */
-    L pi    = atom("\xCE\xBB");            /* λ  two-byte */
+    L fire1 = atom(ts, "\xF0\x9F\x94\xA5");   /* 🔥 */
+    L fire2 = atom(ts, "\xF0\x9F\x94\xA5");   /* 🔥 same */
+    L water = atom(ts, "\xF0\x9F\x92\xA7");   /* 💧 different */
+    L pi    = atom(ts, "\xCE\xBB");            /* λ  two-byte */
     r2_assert("emoji interns identically",      equ(fire1, fire2));
     r2_assert("different emoji differ",        !equ(fire1, water));
     r2_assert("emoji has ATOM tag",             T(fire1) == ATOM);
     r2_assert("two-byte rune has ATOM tag",     T(pi) == ATOM);
-    r2_assert("two-byte rune interns same",     equ(pi, atom("\xCE\xBB")));
+    r2_assert("two-byte rune interns same",     equ(pi, atom(ts, "\xCE\xBB")));
     return NULL;
 }
 
@@ -101,10 +101,10 @@ static const char *test_atom_utf8(void)
 static const char *test_cons_car_cdr(void)
 {
     setup();
-    L p = cons((L)1.0, (L)2.0);
+    L p = cons(ts, (L)1.0, (L)2.0);
     r2_assert("cons has CONS tag",    T(p) == CONS);
-    r2_assert("car returns first",    equ(car(p), (L)1.0));
-    r2_assert("cdr returns second",   equ(cdr(p), (L)2.0));
+    r2_assert("car returns first",    equ(car(ts, p), (L)1.0));
+    r2_assert("cdr returns second",   equ(cdr(ts, p), (L)2.0));
     return NULL;
 }
 
@@ -112,20 +112,20 @@ static const char *test_cons_nested(void)
 {
     setup();
     /* (1 2 3) as a proper list */
-    L lst = cons((L)1.0, cons((L)2.0, cons((L)3.0, l_nil)));
-    r2_assert("car of list",          equ(car(lst), (L)1.0));
-    r2_assert("cadr of list",         equ(car(cdr(lst)), (L)2.0));
-    r2_assert("caddr of list",        equ(car(cdr(cdr(lst))), (L)3.0));
-    r2_assert("cdddr of list is nil", is_nil(cdr(cdr(cdr(lst)))));
+    L lst = cons(ts, (L)1.0, cons(ts, (L)2.0, cons(ts, (L)3.0, ts->l_nil)));
+    r2_assert("car of list",          equ(car(ts, lst), (L)1.0));
+    r2_assert("cadr of list",         equ(car(ts, cdr(ts, lst)), (L)2.0));
+    r2_assert("caddr of list",        equ(car(ts, cdr(ts, cdr(ts, lst))), (L)3.0));
+    r2_assert("cdddr of list is nil", is_nil(ts, cdr(ts, cdr(ts, cdr(ts, lst)))));
     return NULL;
 }
 
 static const char *test_car_cdr_non_pair(void)
 {
     setup();
-    r2_assert("car of number is L_ERR", equ(car((L)42.0), l_err));
-    r2_assert("cdr of number is L_ERR", equ(cdr((L)42.0), l_err));
-    r2_assert("car of nil is L_ERR",    equ(car(l_nil), l_err));
+    r2_assert("car of number is L_ERR", equ(car(ts, (L)42.0), ts->l_err));
+    r2_assert("cdr of number is L_ERR", equ(cdr(ts, (L)42.0), ts->l_err));
+    r2_assert("car of nil is L_ERR",    equ(car(ts, ts->l_nil), ts->l_err));
     return NULL;
 }
 
@@ -136,12 +136,12 @@ static const char *test_car_cdr_non_pair(void)
 static const char *test_is_nil(void)
 {
     setup();
-    r2_assert("nil is nil",                is_nil(l_nil));
-    r2_assert("tru is not nil",           !is_nil(l_tru));
-    r2_assert("number is not nil",        !is_nil((L)42.0));
-    r2_assert("zero is not nil",          !is_nil((L)0.0));
-    r2_assert("cons cell is not nil",     !is_nil(cons(l_nil, l_nil)));
-    r2_assert("L_ERR atom is not nil",      !is_nil(l_err));
+    r2_assert("nil is nil",                is_nil(ts, ts->l_nil));
+    r2_assert("tru is not nil",           !is_nil(ts, ts->l_tru));
+    r2_assert("number is not nil",        !is_nil(ts, (L)42.0));
+    r2_assert("zero is not nil",          !is_nil(ts, (L)0.0));
+    r2_assert("cons cell is not nil",     !is_nil(ts, cons(ts, ts->l_nil, ts->l_nil)));
+    r2_assert("L_ERR atom is not nil",      !is_nil(ts, ts->l_err));
     return NULL;
 }
 
@@ -152,10 +152,10 @@ static const char *test_is_nil(void)
 static const char *test_eval_numbers(void)
 {
     setup();
-    r2_assert("positive number",  equ(eval((L)42.0,  l_env), (L)42.0));
-    r2_assert("zero",             equ(eval((L)0.0,   l_env), (L)0.0));
-    r2_assert("negative number",  equ(eval((L)-7.0,  l_env), (L)-7.0));
-    r2_assert("float",            equ(eval((L)3.14,  l_env), (L)3.14));
+    r2_assert("positive number",  equ(eval(ts, (L)42.0,  ts->l_env), (L)42.0));
+    r2_assert("zero",             equ(eval(ts, (L)0.0,   ts->l_env), (L)0.0));
+    r2_assert("negative number",  equ(eval(ts, (L)-7.0,  ts->l_env), (L)-7.0));
+    r2_assert("float",            equ(eval(ts, (L)3.14,  ts->l_env), (L)3.14));
     return NULL;
 }
 
@@ -167,65 +167,65 @@ static const char *test_eval_add(void)
 {
     setup();
     /* (+ 1 2) => 3 */
-    L e1 = cons(atom("+"), cons((L)1.0, cons((L)2.0, l_nil)));
-    r2_assert("(+ 1 2) == 3", equ(eval(e1, l_env), (L)3.0));
+    L e1 = cons(ts, atom(ts, "+"), cons(ts, (L)1.0, cons(ts, (L)2.0, ts->l_nil)));
+    r2_assert("(+ 1 2) == 3", equ(eval(ts, e1, ts->l_env), (L)3.0));
 
     /* (+ 1 2 3) => 6 */
-    L e2 = cons(atom("+"), cons((L)1.0, cons((L)2.0, cons((L)3.0, l_nil))));
-    r2_assert("(+ 1 2 3) == 6", equ(eval(e2, l_env), (L)6.0));
+    L e2 = cons(ts, atom(ts, "+"), cons(ts, (L)1.0, cons(ts, (L)2.0, cons(ts, (L)3.0, ts->l_nil))));
+    r2_assert("(+ 1 2 3) == 6", equ(eval(ts, e2, ts->l_env), (L)6.0));
 
     /* (+ 0 0) => 0 */
-    L e3 = cons(atom("+"), cons((L)0.0, cons((L)0.0, l_nil)));
-    r2_assert("(+ 0 0) == 0", equ(eval(e3, l_env), (L)0.0));
+    L e3 = cons(ts, atom(ts, "+"), cons(ts, (L)0.0, cons(ts, (L)0.0, ts->l_nil)));
+    r2_assert("(+ 0 0) == 0", equ(eval(ts, e3, ts->l_env), (L)0.0));
     return NULL;
 }
 
 static const char *test_eval_sub(void)
 {
     setup();
-    L e1 = cons(atom("-"), cons((L)10.0, cons((L)3.0, l_nil)));
-    r2_assert("(- 10 3) == 7", equ(eval(e1, l_env), (L)7.0));
+    L e1 = cons(ts, atom(ts, "-"), cons(ts, (L)10.0, cons(ts, (L)3.0, ts->l_nil)));
+    r2_assert("(- 10 3) == 7", equ(eval(ts, e1, ts->l_env), (L)7.0));
 
     /* (- 10 3 2) => 5 */
-    L e2 = cons(atom("-"), cons((L)10.0, cons((L)3.0, cons((L)2.0, l_nil))));
-    r2_assert("(- 10 3 2) == 5", equ(eval(e2, l_env), (L)5.0));
+    L e2 = cons(ts, atom(ts, "-"), cons(ts, (L)10.0, cons(ts, (L)3.0, cons(ts, (L)2.0, ts->l_nil))));
+    r2_assert("(- 10 3 2) == 5", equ(eval(ts, e2, ts->l_env), (L)5.0));
     return NULL;
 }
 
 static const char *test_eval_mul(void)
 {
     setup();
-    L e1 = cons(atom("*"), cons((L)6.0,  cons((L)7.0, l_nil)));
-    r2_assert("(* 6 7) == 42",  equ(eval(e1, l_env), (L)42.0));
+    L e1 = cons(ts, atom(ts, "*"), cons(ts, (L)6.0,  cons(ts, (L)7.0, ts->l_nil)));
+    r2_assert("(* 6 7) == 42",  equ(eval(ts, e1, ts->l_env), (L)42.0));
 
-    L e2 = cons(atom("*"), cons((L)2.0, cons((L)3.0, cons((L)4.0, l_nil))));
-    r2_assert("(* 2 3 4) == 24", equ(eval(e2, l_env), (L)24.0));
+    L e2 = cons(ts, atom(ts, "*"), cons(ts, (L)2.0, cons(ts, (L)3.0, cons(ts, (L)4.0, ts->l_nil))));
+    r2_assert("(* 2 3 4) == 24", equ(eval(ts, e2, ts->l_env), (L)24.0));
     return NULL;
 }
 
 static const char *test_eval_div(void)
 {
     setup();
-    L e1 = cons(atom("/"), cons((L)10.0, cons((L)2.0, l_nil)));
-    r2_assert("(/ 10 2) == 5", equ(eval(e1, l_env), (L)5.0));
+    L e1 = cons(ts, atom(ts, "/"), cons(ts, (L)10.0, cons(ts, (L)2.0, ts->l_nil)));
+    r2_assert("(/ 10 2) == 5", equ(eval(ts, e1, ts->l_env), (L)5.0));
 
     /* (/ 100 2 5) => 10 */
-    L e2 = cons(atom("/"), cons((L)100.0, cons((L)2.0, cons((L)5.0, l_nil))));
-    r2_assert("(/ 100 2 5) == 10", equ(eval(e2, l_env), (L)10.0));
+    L e2 = cons(ts, atom(ts, "/"), cons(ts, (L)100.0, cons(ts, (L)2.0, cons(ts, (L)5.0, ts->l_nil))));
+    r2_assert("(/ 100 2 5) == 10", equ(eval(ts, e2, ts->l_env), (L)10.0));
     return NULL;
 }
 
 static const char *test_eval_int(void)
 {
     setup();
-    L e1 = cons(atom("truncate"), cons((L)3.9,  l_nil));
-    r2_assert("(truncate 3.9) == 3",   equ(eval(e1, l_env), (L)3.0));
+    L e1 = cons(ts, atom(ts, "truncate"), cons(ts, (L)3.9,  ts->l_nil));
+    r2_assert("(truncate 3.9) == 3",   equ(eval(ts, e1, ts->l_env), (L)3.0));
 
-    L e2 = cons(atom("truncate"), cons((L)-2.7, l_nil));
-    r2_assert("(truncate -2.7) == -2", equ(eval(e2, l_env), (L)-2.0));
+    L e2 = cons(ts, atom(ts, "truncate"), cons(ts, (L)-2.7, ts->l_nil));
+    r2_assert("(truncate -2.7) == -2", equ(eval(ts, e2, ts->l_env), (L)-2.0));
 
-    L e3 = cons(atom("truncate"), cons((L)5.0,  l_nil));
-    r2_assert("(truncate 5.0) == 5",   equ(eval(e3, l_env), (L)5.0));
+    L e3 = cons(ts, atom(ts, "truncate"), cons(ts, (L)5.0,  ts->l_nil));
+    r2_assert("(truncate 5.0) == 5",   equ(eval(ts, e3, ts->l_env), (L)5.0));
     return NULL;
 }
 
@@ -236,29 +236,29 @@ static const char *test_eval_int(void)
 static const char *test_eval_lt(void)
 {
     setup();
-    L lt_t = cons(atom("<"), cons((L)1.0, cons((L)2.0, l_nil)));
-    L lt_f = cons(atom("<"), cons((L)2.0, cons((L)1.0, l_nil)));
-    L lt_e = cons(atom("<"), cons((L)2.0, cons((L)2.0, l_nil)));
-    r2_assert("(< 1 2) is tru",   equ(eval(lt_t, l_env), l_tru));
-    r2_assert("(< 2 1) is nil",   equ(eval(lt_f, l_env), l_nil));
-    r2_assert("(< 2 2) is nil",   equ(eval(lt_e, l_env), l_nil));
+    L lt_t = cons(ts, atom(ts, "<"), cons(ts, (L)1.0, cons(ts, (L)2.0, ts->l_nil)));
+    L lt_f = cons(ts, atom(ts, "<"), cons(ts, (L)2.0, cons(ts, (L)1.0, ts->l_nil)));
+    L lt_e = cons(ts, atom(ts, "<"), cons(ts, (L)2.0, cons(ts, (L)2.0, ts->l_nil)));
+    r2_assert("(< 1 2) is tru",   equ(eval(ts, lt_t, ts->l_env), ts->l_tru));
+    r2_assert("(< 2 1) is nil",   equ(eval(ts, lt_f, ts->l_env), ts->l_nil));
+    r2_assert("(< 2 2) is nil",   equ(eval(ts, lt_e, ts->l_env), ts->l_nil));
     return NULL;
 }
 
 static const char *test_eval_eq(void)
 {
     setup();
-    L eq_t = cons(atom("equal"), cons((L)42.0, cons((L)42.0, l_nil)));
-    L eq_f = cons(atom("equal"), cons((L)1.0,  cons((L)2.0,  l_nil)));
-    r2_assert("(equal 42 42) is tru", equ(eval(eq_t, l_env), l_tru));
-    r2_assert("(equal 1 2) is nil",   equ(eval(eq_f, l_env), l_nil));
+    L eq_t = cons(ts, atom(ts, "equal"), cons(ts, (L)42.0, cons(ts, (L)42.0, ts->l_nil)));
+    L eq_f = cons(ts, atom(ts, "equal"), cons(ts, (L)1.0,  cons(ts, (L)2.0,  ts->l_nil)));
+    r2_assert("(equal 42 42) is tru", equ(eval(ts, eq_t, ts->l_env), ts->l_tru));
+    r2_assert("(equal 1 2) is nil",   equ(eval(ts, eq_f, ts->l_env), ts->l_nil));
 
     /* atoms compare by identity */
-    L sym = atom("foo");
-    L eq_a = cons(atom("equal"),
-                  cons(cons(atom("quote"), cons(sym, l_nil)),
-                       cons(cons(atom("quote"), cons(sym, l_nil)), l_nil)));
-    r2_assert("(equal 'foo 'foo) is tru", equ(eval(eq_a, l_env), l_tru));
+    L sym = atom(ts, "foo");
+    L eq_a = cons(ts, atom(ts, "equal"),
+                  cons(ts, cons(ts, atom(ts, "quote"), cons(ts, sym, ts->l_nil)),
+                       cons(ts, cons(ts, atom(ts, "quote"), cons(ts, sym, ts->l_nil)), ts->l_nil)));
+    r2_assert("(equal 'foo 'foo) is tru", equ(eval(ts, eq_a, ts->l_env), ts->l_tru));
     return NULL;
 }
 
@@ -269,36 +269,36 @@ static const char *test_eval_eq(void)
 static const char *test_eval_not(void)
 {
     setup();
-    L not_nil = cons(atom("not"), cons(l_nil, l_nil));
-    L not_tru = cons(atom("not"), cons(l_tru, l_nil));
-    L not_num = cons(atom("not"), cons((L)42.0, l_nil));
-    r2_assert("(not ()) is tru",  equ(eval(not_nil, l_env), l_tru));
-    r2_assert("(not #t) is nil",  equ(eval(not_tru, l_env), l_nil));
-    r2_assert("(not 42) is nil",  equ(eval(not_num, l_env), l_nil));
+    L not_nil = cons(ts, atom(ts, "not"), cons(ts, ts->l_nil, ts->l_nil));
+    L not_tru = cons(ts, atom(ts, "not"), cons(ts, ts->l_tru, ts->l_nil));
+    L not_num = cons(ts, atom(ts, "not"), cons(ts, (L)42.0, ts->l_nil));
+    r2_assert("(not ()) is tru",  equ(eval(ts, not_nil, ts->l_env), ts->l_tru));
+    r2_assert("(not #t) is nil",  equ(eval(ts, not_tru, ts->l_env), ts->l_nil));
+    r2_assert("(not 42) is nil",  equ(eval(ts, not_num, ts->l_env), ts->l_nil));
     return NULL;
 }
 
 static const char *test_eval_and(void)
 {
     setup();
-    L tt = cons(atom("and"), cons(l_tru, cons(l_tru,      l_nil)));
-    L tf = cons(atom("and"), cons(l_tru, cons(l_nil,      l_nil)));
-    L ff = cons(atom("and"), cons(l_nil, cons(l_nil,      l_nil)));
-    r2_assert("(and #t #t) truthy", !is_nil(eval(tt, l_env)));
-    r2_assert("(and #t ()) is nil",  is_nil(eval(tf, l_env)));
-    r2_assert("(and () ()) is nil",  is_nil(eval(ff, l_env)));
+    L tt = cons(ts, atom(ts, "and"), cons(ts, ts->l_tru, cons(ts, ts->l_tru,      ts->l_nil)));
+    L tf = cons(ts, atom(ts, "and"), cons(ts, ts->l_tru, cons(ts, ts->l_nil,      ts->l_nil)));
+    L ff = cons(ts, atom(ts, "and"), cons(ts, ts->l_nil, cons(ts, ts->l_nil,      ts->l_nil)));
+    r2_assert("(and #t #t) truthy", !is_nil(ts, eval(ts, tt, ts->l_env)));
+    r2_assert("(and #t ()) is nil",  is_nil(ts, eval(ts, tf, ts->l_env)));
+    r2_assert("(and () ()) is nil",  is_nil(ts, eval(ts, ff, ts->l_env)));
     return NULL;
 }
 
 static const char *test_eval_or(void)
 {
     setup();
-    L ff = cons(atom("or"), cons(l_nil, cons(l_nil, l_nil)));
-    L tf = cons(atom("or"), cons(l_tru, cons(l_nil, l_nil)));
-    L ft = cons(atom("or"), cons(l_nil, cons(l_tru, l_nil)));
-    r2_assert("(or () ()) is nil",   is_nil(eval(ff, l_env)));
-    r2_assert("(or #t ()) is truthy", !is_nil(eval(tf, l_env)));
-    r2_assert("(or () #t) is truthy", !is_nil(eval(ft, l_env)));
+    L ff = cons(ts, atom(ts, "or"), cons(ts, ts->l_nil, cons(ts, ts->l_nil, ts->l_nil)));
+    L tf = cons(ts, atom(ts, "or"), cons(ts, ts->l_tru, cons(ts, ts->l_nil, ts->l_nil)));
+    L ft = cons(ts, atom(ts, "or"), cons(ts, ts->l_nil, cons(ts, ts->l_tru, ts->l_nil)));
+    r2_assert("(or () ()) is nil",   is_nil(ts, eval(ts, ff, ts->l_env)));
+    r2_assert("(or #t ()) is truthy", !is_nil(ts, eval(ts, tf, ts->l_env)));
+    r2_assert("(or () #t) is truthy", !is_nil(ts, eval(ts, ft, ts->l_env)));
     return NULL;
 }
 
@@ -309,16 +309,16 @@ static const char *test_eval_or(void)
 static const char *test_eval_quote(void)
 {
     setup();
-    L sym  = atom("hello");
-    L expr = cons(atom("quote"), cons(sym, l_nil));
-    r2_assert("(quote hello) returns atom unevaluated", equ(eval(expr, l_env), sym));
+    L sym  = atom(ts, "hello");
+    L expr = cons(ts, atom(ts, "quote"), cons(ts, sym, ts->l_nil));
+    r2_assert("(quote hello) returns atom unevaluated", equ(eval(ts, expr, ts->l_env), sym));
 
     /* quoted list is not evaluated */
-    L lst      = cons((L)1.0, cons((L)2.0, l_nil));
-    L qlst     = cons(atom("quote"), cons(lst, l_nil));
-    L result   = eval(qlst, l_env);
+    L lst      = cons(ts, (L)1.0, cons(ts, (L)2.0, ts->l_nil));
+    L qlst     = cons(ts, atom(ts, "quote"), cons(ts, lst, ts->l_nil));
+    L result   = eval(ts, qlst, ts->l_env);
     r2_assert("(quote (1 2)) is a pair",    T(result) == CONS);
-    r2_assert("car of quoted list is 1",    equ(car(result), (L)1.0));
+    r2_assert("car of quoted list is 1",    equ(car(ts, result), (L)1.0));
     return NULL;
 }
 
@@ -330,12 +330,12 @@ static const char *test_eval_if(void)
 {
     setup();
     /* (if #t 1 2) => 1 */
-    L if_t = cons(atom("if"), cons(l_tru, cons((L)1.0, cons((L)2.0, l_nil))));
-    r2_assert("(if #t 1 2) == 1", equ(eval(if_t, l_env), (L)1.0));
+    L if_t = cons(ts, atom(ts, "if"), cons(ts, ts->l_tru, cons(ts, (L)1.0, cons(ts, (L)2.0, ts->l_nil))));
+    r2_assert("(if #t 1 2) == 1", equ(eval(ts, if_t, ts->l_env), (L)1.0));
 
     /* (if () 1 2) => 2 */
-    L if_f = cons(atom("if"), cons(l_nil, cons((L)1.0, cons((L)2.0, l_nil))));
-    r2_assert("(if () 1 2) == 2", equ(eval(if_f, l_env), (L)2.0));
+    L if_f = cons(ts, atom(ts, "if"), cons(ts, ts->l_nil, cons(ts, (L)1.0, cons(ts, (L)2.0, ts->l_nil))));
+    r2_assert("(if () 1 2) == 2", equ(eval(ts, if_f, ts->l_env), (L)2.0));
     return NULL;
 }
 
@@ -343,15 +343,15 @@ static const char *test_eval_cond(void)
 {
     setup();
     /* (cond (() 1) (#t 2)) => 2 */
-    L c1   = cons(l_nil, cons((L)1.0, l_nil));
-    L c2   = cons(l_tru, cons((L)2.0, l_nil));
-    L expr = cons(atom("cond"), cons(c1, cons(c2, l_nil)));
-    r2_assert("(cond (() 1)(#t 2)) == 2", equ(eval(expr, l_env), (L)2.0));
+    L c1   = cons(ts, ts->l_nil, cons(ts, (L)1.0, ts->l_nil));
+    L c2   = cons(ts, ts->l_tru, cons(ts, (L)2.0, ts->l_nil));
+    L expr = cons(ts, atom(ts, "cond"), cons(ts, c1, cons(ts, c2, ts->l_nil)));
+    r2_assert("(cond (() 1)(#t 2)) == 2", equ(eval(ts, expr, ts->l_env), (L)2.0));
 
     /* (cond (#t 99)) => 99 */
-    L c3    = cons(l_tru, cons((L)99.0, l_nil));
-    L expr2 = cons(atom("cond"), cons(c3, l_nil));
-    r2_assert("(cond (#t 99)) == 99", equ(eval(expr2, l_env), (L)99.0));
+    L c3    = cons(ts, ts->l_tru, cons(ts, (L)99.0, ts->l_nil));
+    L expr2 = cons(ts, atom(ts, "cond"), cons(ts, c3, ts->l_nil));
+    r2_assert("(cond (#t 99)) == 99", equ(eval(ts, expr2, ts->l_env), (L)99.0));
     return NULL;
 }
 
@@ -363,19 +363,19 @@ static const char *test_eval_pair(void)
 {
     setup();
     /* (consp '(1 . 2)) => #t */
-    L p       = cons((L)1.0, (L)2.0);
-    L qp      = cons(atom("quote"), cons(p, l_nil));
-    L is_pair = cons(atom("consp"), cons(qp, l_nil));
-    r2_assert("(consp '(1 . 2)) is tru", equ(eval(is_pair, l_env), l_tru));
+    L p       = cons(ts, (L)1.0, (L)2.0);
+    L qp      = cons(ts, atom(ts, "quote"), cons(ts, p, ts->l_nil));
+    L is_pair = cons(ts, atom(ts, "consp"), cons(ts, qp, ts->l_nil));
+    r2_assert("(consp '(1 . 2)) is tru", equ(eval(ts, is_pair, ts->l_env), ts->l_tru));
 
     /* (consp 42) => () */
-    L not_pair = cons(atom("consp"), cons((L)42.0, l_nil));
-    r2_assert("(consp 42) is nil", equ(eval(not_pair, l_env), l_nil));
+    L not_pair = cons(ts, atom(ts, "consp"), cons(ts, (L)42.0, ts->l_nil));
+    r2_assert("(consp 42) is nil", equ(eval(ts, not_pair, ts->l_env), ts->l_nil));
 
     /* (consp ()) => () */
-    L qnil      = cons(atom("quote"), cons(l_nil, l_nil));
-    L nil_pair  = cons(atom("consp"), cons(qnil, l_nil));
-    r2_assert("(consp '()) is nil", equ(eval(nil_pair, l_env), l_nil));
+    L qnil      = cons(ts, atom(ts, "quote"), cons(ts, ts->l_nil, ts->l_nil));
+    L nil_pair  = cons(ts, atom(ts, "consp"), cons(ts, qnil, ts->l_nil));
+    r2_assert("(consp '()) is nil", equ(eval(ts, nil_pair, ts->l_env), ts->l_nil));
     return NULL;
 }
 
@@ -387,14 +387,14 @@ static const char *test_eval_cons_car_cdr(void)
 {
     setup();
     /* (car (cons 10 20)) => 10 */
-    L inner    = cons(atom("cons"), cons((L)10.0, cons((L)20.0, l_nil)));
-    L car_expr = cons(atom("car"),  cons(inner,   l_nil));
-    r2_assert("(car (cons 10 20)) == 10", equ(eval(car_expr, l_env), (L)10.0));
+    L inner    = cons(ts, atom(ts, "cons"), cons(ts, (L)10.0, cons(ts, (L)20.0, ts->l_nil)));
+    L car_expr = cons(ts, atom(ts, "car"),  cons(ts, inner,   ts->l_nil));
+    r2_assert("(car (cons 10 20)) == 10", equ(eval(ts, car_expr, ts->l_env), (L)10.0));
 
     /* (cdr (cons 10 20)) => 20 */
-    L inner2   = cons(atom("cons"), cons((L)10.0, cons((L)20.0, l_nil)));
-    L cdr_expr = cons(atom("cdr"),  cons(inner2,  l_nil));
-    r2_assert("(cdr (cons 10 20)) == 20", equ(eval(cdr_expr, l_env), (L)20.0));
+    L inner2   = cons(ts, atom(ts, "cons"), cons(ts, (L)10.0, cons(ts, (L)20.0, ts->l_nil)));
+    L cdr_expr = cons(ts, atom(ts, "cdr"),  cons(ts, inner2,  ts->l_nil));
+    r2_assert("(cdr (cons 10 20)) == 20", equ(eval(ts, cdr_expr, ts->l_env), (L)20.0));
     return NULL;
 }
 
@@ -406,10 +406,10 @@ static const char *test_eval_lambda(void)
 {
     setup();
     /* ((lambda (x) (* x x)) 5) => 25 */
-    L body  = cons(atom("*"), cons(atom("x"), cons(atom("x"), l_nil)));
-    L lam   = cons(atom("lambda"), cons(cons(atom("x"), l_nil), cons(body, l_nil)));
-    L call  = cons(lam, cons((L)5.0, l_nil));
-    r2_assert("((lambda (x) (* x x)) 5) == 25", equ(eval(call, l_env), (L)25.0));
+    L body  = cons(ts, atom(ts, "*"), cons(ts, atom(ts, "x"), cons(ts, atom(ts, "x"), ts->l_nil)));
+    L lam   = cons(ts, atom(ts, "lambda"), cons(ts, cons(ts, atom(ts, "x"), ts->l_nil), cons(ts, body, ts->l_nil)));
+    L call  = cons(ts, lam, cons(ts, (L)5.0, ts->l_nil));
+    r2_assert("((lambda (x) (* x x)) 5) == 25", equ(eval(ts, call, ts->l_env), (L)25.0));
     return NULL;
 }
 
@@ -417,11 +417,11 @@ static const char *test_eval_lambda_multi_arg(void)
 {
     setup();
     /* ((lambda (x y) (+ x y)) 3 4) => 7 */
-    L body  = cons(atom("+"), cons(atom("x"), cons(atom("y"), l_nil)));
-    L args  = cons(atom("x"), cons(atom("y"), l_nil));
-    L lam   = cons(atom("lambda"), cons(args, cons(body, l_nil)));
-    L call  = cons(lam, cons((L)3.0, cons((L)4.0, l_nil)));
-    r2_assert("((lambda (x y) (+ x y)) 3 4) == 7", equ(eval(call, l_env), (L)7.0));
+    L body  = cons(ts, atom(ts, "+"), cons(ts, atom(ts, "x"), cons(ts, atom(ts, "y"), ts->l_nil)));
+    L args  = cons(ts, atom(ts, "x"), cons(ts, atom(ts, "y"), ts->l_nil));
+    L lam   = cons(ts, atom(ts, "lambda"), cons(ts, args, cons(ts, body, ts->l_nil)));
+    L call  = cons(ts, lam, cons(ts, (L)3.0, cons(ts, (L)4.0, ts->l_nil)));
+    r2_assert("((lambda (x y) (+ x y)) 3 4) == 7", equ(eval(ts, call, ts->l_env), (L)7.0));
     return NULL;
 }
 
@@ -429,15 +429,15 @@ static const char *test_eval_closure_captures(void)
 {
     setup();
     /* ((lambda (x) (lambda (y) (+ x y))) 10) => closure, then apply to 5 => 15 */
-    L inner_body = cons(atom("+"), cons(atom("x"), cons(atom("y"), l_nil)));
-    L inner_lam  = cons(atom("lambda"), cons(cons(atom("y"), l_nil), cons(inner_body, l_nil)));
-    L outer_lam  = cons(atom("lambda"), cons(cons(atom("x"), l_nil), cons(inner_lam, l_nil)));
-    L outer_call = cons(outer_lam, cons((L)10.0, l_nil));
-    L adder      = eval(outer_call, l_env);
+    L inner_body = cons(ts, atom(ts, "+"), cons(ts, atom(ts, "x"), cons(ts, atom(ts, "y"), ts->l_nil)));
+    L inner_lam  = cons(ts, atom(ts, "lambda"), cons(ts, cons(ts, atom(ts, "y"), ts->l_nil), cons(ts, inner_body, ts->l_nil)));
+    L outer_lam  = cons(ts, atom(ts, "lambda"), cons(ts, cons(ts, atom(ts, "x"), ts->l_nil), cons(ts, inner_lam, ts->l_nil)));
+    L outer_call = cons(ts, outer_lam, cons(ts, (L)10.0, ts->l_nil));
+    L adder      = eval(ts, outer_call, ts->l_env);
     r2_assert("outer returns a closure", T(adder) == CLOS);
-    L inner_call = cons(adder, cons((L)5.0, l_nil));  /* can't use eval directly on cons(adder,...) */
+    L inner_call = cons(ts, adder, cons(ts, (L)5.0, ts->l_nil));  /* can't use eval directly on cons(ts, adder,...) */
     /* apply the closure */
-    L result = apply(adder, cons((L)5.0, l_nil), l_env);
+    L result = apply(ts, adder, cons(ts, (L)5.0, ts->l_nil), ts->l_env);
     r2_assert("closure captures x=10, (adder 5) == 15", equ(result, (L)15.0));
     return NULL;
 }
@@ -450,9 +450,9 @@ static const char *test_eval_define(void)
 {
     setup();
     /* (define answer 42) then answer => 42 */
-    L def = cons(atom("define"), cons(atom("answer"), cons((L)42.0, l_nil)));
-    eval(def, l_env);
-    r2_assert("defined value resolves", equ(eval(atom("answer"), l_env), (L)42.0));
+    L def = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "answer"), cons(ts, (L)42.0, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    r2_assert("defined value resolves", equ(eval(ts, atom(ts, "answer"), ts->l_env), (L)42.0));
     return NULL;
 }
 
@@ -460,12 +460,12 @@ static const char *test_eval_define_lambda(void)
 {
     setup();
     /* (define sq (lambda (x) (* x x))) then (sq 9) => 81 */
-    L body   = cons(atom("*"), cons(atom("x"), cons(atom("x"), l_nil)));
-    L lam    = cons(atom("lambda"), cons(cons(atom("x"), l_nil), cons(body, l_nil)));
-    L def    = cons(atom("define"), cons(atom("sq"), cons(lam, l_nil)));
-    eval(def, l_env);
-    L call   = cons(atom("sq"), cons((L)9.0, l_nil));
-    r2_assert("(sq 9) == 81 after define", equ(eval(call, l_env), (L)81.0));
+    L body   = cons(ts, atom(ts, "*"), cons(ts, atom(ts, "x"), cons(ts, atom(ts, "x"), ts->l_nil)));
+    L lam    = cons(ts, atom(ts, "lambda"), cons(ts, cons(ts, atom(ts, "x"), ts->l_nil), cons(ts, body, ts->l_nil)));
+    L def    = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "sq"), cons(ts, lam, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L call   = cons(ts, atom(ts, "sq"), cons(ts, (L)9.0, ts->l_nil));
+    r2_assert("(sq 9) == 81 after define", equ(eval(ts, call, ts->l_env), (L)81.0));
     return NULL;
 }
 
@@ -477,11 +477,11 @@ static const char *test_eval_leta(void)
 {
     setup();
     /* (let* (x 3) (y 4) (+ x y)) => 7 */
-    L body  = cons(atom("+"), cons(atom("x"), cons(atom("y"), l_nil)));
-    L b2    = cons(cons(atom("y"), cons((L)4.0, l_nil)), cons(body, l_nil));
-    L b1    = cons(cons(atom("x"), cons((L)3.0, l_nil)), b2);
-    L expr  = cons(atom("let*"), b1);
-    r2_assert("(let* (x 3)(y 4)(+ x y)) == 7", equ(eval(expr, l_env), (L)7.0));
+    L body  = cons(ts, atom(ts, "+"), cons(ts, atom(ts, "x"), cons(ts, atom(ts, "y"), ts->l_nil)));
+    L b2    = cons(ts, cons(ts, atom(ts, "y"), cons(ts, (L)4.0, ts->l_nil)), cons(ts, body, ts->l_nil));
+    L b1    = cons(ts, cons(ts, atom(ts, "x"), cons(ts, (L)3.0, ts->l_nil)), b2);
+    L expr  = cons(ts, atom(ts, "let*"), b1);
+    r2_assert("(let* (x 3)(y 4)(+ x y)) == 7", equ(eval(ts, expr, ts->l_env), (L)7.0));
     return NULL;
 }
 
@@ -489,11 +489,11 @@ static const char *test_eval_leta_sequential(void)
 {
     setup();
     /* (let* (x 2) (y (* x 3)) y) => 6   y depends on x */
-    L y_body = cons(atom("*"), cons(atom("x"), cons((L)3.0, l_nil)));
-    L b2     = cons(cons(atom("y"), cons(y_body, l_nil)), cons(atom("y"), l_nil));
-    L b1     = cons(cons(atom("x"), cons((L)2.0, l_nil)), b2);
-    L expr   = cons(atom("let*"), b1);
-    r2_assert("(let* (x 2)(y (* x 3)) y) == 6", equ(eval(expr, l_env), (L)6.0));
+    L y_body = cons(ts, atom(ts, "*"), cons(ts, atom(ts, "x"), cons(ts, (L)3.0, ts->l_nil)));
+    L b2     = cons(ts, cons(ts, atom(ts, "y"), cons(ts, y_body, ts->l_nil)), cons(ts, atom(ts, "y"), ts->l_nil));
+    L b1     = cons(ts, cons(ts, atom(ts, "x"), cons(ts, (L)2.0, ts->l_nil)), b2);
+    L expr   = cons(ts, atom(ts, "let*"), b1);
+    r2_assert("(let* (x 2)(y (* x 3)) y) == 6", equ(eval(ts, expr, ts->l_env), (L)6.0));
     return NULL;
 }
 
@@ -507,17 +507,17 @@ static const char *test_eval_recursion(void)
     /* (define fact (lambda (n) (if (< n 2) 1 (* n (fact (- n 1))))))
        (fact 5) => 120 */
     L base   = (L)1.0;
-    L rec_call = cons(atom("fact"),
-                      cons(cons(atom("-"), cons(atom("n"), cons((L)1.0, l_nil))), l_nil));
-    L mul_expr = cons(atom("*"), cons(atom("n"), cons(rec_call, l_nil)));
-    L body   = cons(atom("if"),
-                    cons(cons(atom("<"), cons(atom("n"), cons((L)2.0, l_nil))),
-                         cons(base, cons(mul_expr, l_nil))));
-    L lam    = cons(atom("lambda"), cons(cons(atom("n"), l_nil), cons(body, l_nil)));
-    L def    = cons(atom("define"), cons(atom("fact"), cons(lam, l_nil)));
-    eval(def, l_env);
-    L call   = cons(atom("fact"), cons((L)5.0, l_nil));
-    r2_assert("(fact 5) == 120", equ(eval(call, l_env), (L)120.0));
+    L rec_call = cons(ts, atom(ts, "fact"),
+                      cons(ts, cons(ts, atom(ts, "-"), cons(ts, atom(ts, "n"), cons(ts, (L)1.0, ts->l_nil))), ts->l_nil));
+    L mul_expr = cons(ts, atom(ts, "*"), cons(ts, atom(ts, "n"), cons(ts, rec_call, ts->l_nil)));
+    L body   = cons(ts, atom(ts, "if"),
+                    cons(ts, cons(ts, atom(ts, "<"), cons(ts, atom(ts, "n"), cons(ts, (L)2.0, ts->l_nil))),
+                         cons(ts, base, cons(ts, mul_expr, ts->l_nil))));
+    L lam    = cons(ts, atom(ts, "lambda"), cons(ts, cons(ts, atom(ts, "n"), ts->l_nil), cons(ts, body, ts->l_nil)));
+    L def    = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "fact"), cons(ts, lam, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L call   = cons(ts, atom(ts, "fact"), cons(ts, (L)5.0, ts->l_nil));
+    r2_assert("(fact 5) == 120", equ(eval(ts, call, ts->l_env), (L)120.0));
     return NULL;
 }
 
@@ -530,24 +530,24 @@ static const char *test_eval_utf8_atoms(void)
     setup();
 
     /* (define 🔥 42) then 🔥 => 42 */
-    L def1 = cons(atom("define"), cons(atom("\xF0\x9F\x94\xA5"), cons((L)42.0, l_nil)));
-    eval(def1, l_env);
+    L def1 = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "\xF0\x9F\x94\xA5"), cons(ts, (L)42.0, ts->l_nil)));
+    eval(ts, def1, ts->l_env);
     r2_assert("emoji atom resolves",
-              equ(eval(atom("\xF0\x9F\x94\xA5"), l_env), (L)42.0));
+              equ(eval(ts, atom(ts, "\xF0\x9F\x94\xA5"), ts->l_env), (L)42.0));
 
     /* (define λ (lambda (x) (* x 2))) then (λ 21) => 42 */
-    L body = cons(atom("*"), cons(atom("x"), cons((L)2.0, l_nil)));
-    L lam  = cons(atom("lambda"), cons(cons(atom("x"), l_nil), cons(body, l_nil)));
-    L def2 = cons(atom("define"), cons(atom("\xCE\xBB"), cons(lam, l_nil)));
-    eval(def2, l_env);
-    L call = cons(atom("\xCE\xBB"), cons((L)21.0, l_nil));
-    r2_assert("(λ 21) == 42", equ(eval(call, l_env), (L)42.0));
+    L body = cons(ts, atom(ts, "*"), cons(ts, atom(ts, "x"), cons(ts, (L)2.0, ts->l_nil)));
+    L lam  = cons(ts, atom(ts, "lambda"), cons(ts, cons(ts, atom(ts, "x"), ts->l_nil), cons(ts, body, ts->l_nil)));
+    L def2 = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "\xCE\xBB"), cons(ts, lam, ts->l_nil)));
+    eval(ts, def2, ts->l_env);
+    L call = cons(ts, atom(ts, "\xCE\xBB"), cons(ts, (L)21.0, ts->l_nil));
+    r2_assert("(λ 21) == 42", equ(eval(ts, call, ts->l_env), (L)42.0));
 
     /* Greek π as a value */
-    L def3 = cons(atom("define"), cons(atom("\xCF\x80"), cons((L)3.14159, l_nil)));
-    eval(def3, l_env);
+    L def3 = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "\xCF\x80"), cons(ts, (L)3.14159, ts->l_nil)));
+    eval(ts, def3, ts->l_env);
     r2_assert("π resolves to 3.14159",
-              equ(eval(atom("\xCF\x80"), l_env), (L)3.14159));
+              equ(eval(ts, atom(ts, "\xCF\x80"), ts->l_env), (L)3.14159));
     return NULL;
 }
 
@@ -560,7 +560,7 @@ static L make_vec(II len, const float *data)
 {
     II shape[1];
     shape[0] = len;
-    return box(TENS, (II)(alloc_tensor(1, shape, len, data) - tensor_heap));
+    return box(TENS, (II)(alloc_tensor(ts, 1, shape, len, data) - ts->tensor_heap));
 }
 
 static L make_mat(II rows, II cols, const float *data)
@@ -568,7 +568,7 @@ static L make_mat(II rows, II cols, const float *data)
     II shape[2];
     shape[0] = rows;
     shape[1] = cols;
-    return box(TENS, (II)(alloc_tensor(2, shape, rows * cols, data) - tensor_heap));
+    return box(TENS, (II)(alloc_tensor(ts, 2, shape, rows * cols, data) - ts->tensor_heap));
 }
 
 /* -----------------------------------------------------------------------
@@ -594,11 +594,11 @@ static const char *test_tensor_predicate(void)
     float d[] = {1.f, 2.f};
     L v = make_vec(2, d);
     /* (tensorp v) => #t */
-    L expr_t = cons(atom("tensorp"), cons(v, l_nil));
-    r2_assert("(tensorp [1 2]) is tru",   equ(eval(expr_t, l_env), l_tru));
+    L expr_t = cons(ts, atom(ts, "tensorp"), cons(ts, v, ts->l_nil));
+    r2_assert("(tensorp [1 2]) is tru",   equ(eval(ts, expr_t, ts->l_env), ts->l_tru));
     /* (tensorp 42) => () */
-    L expr_f = cons(atom("tensorp"), cons((L)42.0, l_nil));
-    r2_assert("(tensorp 42) is nil",      equ(eval(expr_f, l_env), l_nil));
+    L expr_f = cons(ts, atom(ts, "tensorp"), cons(ts, (L)42.0, ts->l_nil));
+    r2_assert("(tensorp 42) is nil",      equ(eval(ts, expr_f, ts->l_env), ts->l_nil));
     return NULL;
 }
 
@@ -613,14 +613,14 @@ static const char *test_tensor_shape_rank_vec(void)
     L v = make_vec(3, d);
 
     /* (rank v) => 1 */
-    L rank_expr = cons(atom("rank"), cons(v, l_nil));
-    r2_assert("rank of vec is 1", equ(eval(rank_expr, l_env), (L)1.0));
+    L rank_expr = cons(ts, atom(ts, "rank"), cons(ts, v, ts->l_nil));
+    r2_assert("rank of vec is 1", equ(eval(ts, rank_expr, ts->l_env), (L)1.0));
 
     /* (shape v) => [3] */
-    L shape_expr = cons(atom("shape"), cons(v, l_nil));
-    L sh = eval(shape_expr, l_env);
+    L shape_expr = cons(ts, atom(ts, "shape"), cons(ts, v, ts->l_nil));
+    L sh = eval(ts, shape_expr, ts->l_env);
     r2_assert("shape of vec is TENS",        T(sh) == TENS);
-    r2_assert("shape[0] of [10 20 30] == 3", tensor_heap[ord(sh)].data[0] == 3.f);
+    r2_assert("shape[0] of [10 20 30] == 3", ts->tensor_heap[ord(sh)].data[0] == 3.f);
     return NULL;
 }
 
@@ -631,14 +631,14 @@ static const char *test_tensor_shape_rank_mat(void)
     L m = make_mat(2, 3, d);
 
     /* (rank m) => 2 */
-    L rank_expr = cons(atom("rank"), cons(m, l_nil));
-    r2_assert("rank of 2x3 mat is 2", equ(eval(rank_expr, l_env), (L)2.0));
+    L rank_expr = cons(ts, atom(ts, "rank"), cons(ts, m, ts->l_nil));
+    r2_assert("rank of 2x3 mat is 2", equ(eval(ts, rank_expr, ts->l_env), (L)2.0));
 
     /* (shape m) => [2 3] */
-    L shape_expr = cons(atom("shape"), cons(m, l_nil));
-    L sh = eval(shape_expr, l_env);
-    r2_assert("shape[0] of 2x3 == 2", tensor_heap[ord(sh)].data[0] == 2.f);
-    r2_assert("shape[1] of 2x3 == 3", tensor_heap[ord(sh)].data[1] == 3.f);
+    L shape_expr = cons(ts, atom(ts, "shape"), cons(ts, m, ts->l_nil));
+    L sh = eval(ts, shape_expr, ts->l_env);
+    r2_assert("shape[0] of 2x3 == 2", ts->tensor_heap[ord(sh)].data[0] == 2.f);
+    r2_assert("shape[1] of 2x3 == 3", ts->tensor_heap[ord(sh)].data[1] == 3.f);
     return NULL;
 }
 
@@ -652,12 +652,12 @@ static const char *test_tensor_slice_vec(void)
     float d[] = {10.f, 20.f, 30.f};
     L v = make_vec(3, d);
 
-    L s0 = cons(atom("slice"), cons(v, cons((L)0.0, l_nil)));
-    L s1 = cons(atom("slice"), cons(v, cons((L)1.0, l_nil)));
-    L s2 = cons(atom("slice"), cons(v, cons((L)2.0, l_nil)));
-    r2_assert("slice 0 == 10", equ(eval(s0, l_env), (L)10.0));
-    r2_assert("slice 1 == 20", equ(eval(s1, l_env), (L)20.0));
-    r2_assert("slice 2 == 30", equ(eval(s2, l_env), (L)30.0));
+    L s0 = cons(ts, atom(ts, "slice"), cons(ts, v, cons(ts, (L)0.0, ts->l_nil)));
+    L s1 = cons(ts, atom(ts, "slice"), cons(ts, v, cons(ts, (L)1.0, ts->l_nil)));
+    L s2 = cons(ts, atom(ts, "slice"), cons(ts, v, cons(ts, (L)2.0, ts->l_nil)));
+    r2_assert("slice 0 == 10", equ(eval(ts, s0, ts->l_env), (L)10.0));
+    r2_assert("slice 1 == 20", equ(eval(ts, s1, ts->l_env), (L)20.0));
+    r2_assert("slice 2 == 30", equ(eval(ts, s2, ts->l_env), (L)30.0));
     return NULL;
 }
 
@@ -668,16 +668,16 @@ static const char *test_tensor_slice_mat(void)
     float d[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
     L m = make_mat(2, 3, d);
 
-    L row0_expr = cons(atom("slice"), cons(m, cons((L)0.0, l_nil)));
-    L row0 = eval(row0_expr, l_env);
+    L row0_expr = cons(ts, atom(ts, "slice"), cons(ts, m, cons(ts, (L)0.0, ts->l_nil)));
+    L row0 = eval(ts, row0_expr, ts->l_env);
     r2_assert("row0 is TENS",      T(row0) == TENS);
-    r2_assert("row0 len == 3",     tensor_heap[ord(row0)].len == 3);
-    r2_assert("row0[0] == 1",      tensor_heap[ord(row0)].data[0] == 1.f);
-    r2_assert("row0[2] == 3",      tensor_heap[ord(row0)].data[2] == 3.f);
+    r2_assert("row0 len == 3",     ts->tensor_heap[ord(row0)].len == 3);
+    r2_assert("row0[0] == 1",      ts->tensor_heap[ord(row0)].data[0] == 1.f);
+    r2_assert("row0[2] == 3",      ts->tensor_heap[ord(row0)].data[2] == 3.f);
 
-    L row1_expr = cons(atom("slice"), cons(m, cons((L)1.0, l_nil)));
-    L row1 = eval(row1_expr, l_env);
-    r2_assert("row1[0] == 4",      tensor_heap[ord(row1)].data[0] == 4.f);
+    L row1_expr = cons(ts, atom(ts, "slice"), cons(ts, m, cons(ts, (L)1.0, ts->l_nil)));
+    L row1 = eval(ts, row1_expr, ts->l_env);
+    r2_assert("row1[0] == 4",      ts->tensor_heap[ord(row1)].data[0] == 4.f);
     return NULL;
 }
 
@@ -693,12 +693,12 @@ static const char *test_tensor_add(void)
     L va = make_vec(3, a);
     L vb = make_vec(3, b);
 
-    L expr = cons(atom("+"), cons(va, cons(vb, l_nil)));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "+"), cons(ts, va, cons(ts, vb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("vec add is TENS",    T(r) == TENS);
-    r2_assert("1+4 == 5",           tensor_heap[ord(r)].data[0] == 5.f);
-    r2_assert("2+5 == 7",           tensor_heap[ord(r)].data[1] == 7.f);
-    r2_assert("3+6 == 9",           tensor_heap[ord(r)].data[2] == 9.f);
+    r2_assert("1+4 == 5",           ts->tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("2+5 == 7",           ts->tensor_heap[ord(r)].data[1] == 7.f);
+    r2_assert("3+6 == 9",           ts->tensor_heap[ord(r)].data[2] == 9.f);
     return NULL;
 }
 
@@ -710,11 +710,11 @@ static const char *test_tensor_sub(void)
     L va = make_vec(3, a);
     L vb = make_vec(3, b);
 
-    L expr = cons(atom("-"), cons(va, cons(vb, l_nil)));
-    L r = eval(expr, l_env);
-    r2_assert("10-1 == 9",  tensor_heap[ord(r)].data[0] == 9.f);
-    r2_assert("20-2 == 18", tensor_heap[ord(r)].data[1] == 18.f);
-    r2_assert("30-3 == 27", tensor_heap[ord(r)].data[2] == 27.f);
+    L expr = cons(ts, atom(ts, "-"), cons(ts, va, cons(ts, vb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
+    r2_assert("10-1 == 9",  ts->tensor_heap[ord(r)].data[0] == 9.f);
+    r2_assert("20-2 == 18", ts->tensor_heap[ord(r)].data[1] == 18.f);
+    r2_assert("30-3 == 27", ts->tensor_heap[ord(r)].data[2] == 27.f);
     return NULL;
 }
 
@@ -726,11 +726,11 @@ static const char *test_tensor_mul(void)
     L va = make_vec(3, a);
     L vb = make_vec(3, b);
 
-    L expr = cons(atom("*"), cons(va, cons(vb, l_nil)));
-    L r = eval(expr, l_env);
-    r2_assert("2*1 == 2",   tensor_heap[ord(r)].data[0] == 2.f);
-    r2_assert("3*2 == 6",   tensor_heap[ord(r)].data[1] == 6.f);
-    r2_assert("4*3 == 12",  tensor_heap[ord(r)].data[2] == 12.f);
+    L expr = cons(ts, atom(ts, "*"), cons(ts, va, cons(ts, vb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
+    r2_assert("2*1 == 2",   ts->tensor_heap[ord(r)].data[0] == 2.f);
+    r2_assert("3*2 == 6",   ts->tensor_heap[ord(r)].data[1] == 6.f);
+    r2_assert("4*3 == 12",  ts->tensor_heap[ord(r)].data[2] == 12.f);
     return NULL;
 }
 
@@ -742,11 +742,11 @@ static const char *test_tensor_div(void)
     L va = make_vec(3, a);
     L vb = make_vec(3, b);
 
-    L expr = cons(atom("/"), cons(va, cons(vb, l_nil)));
-    L r = eval(expr, l_env);
-    r2_assert("10/2 == 5",  tensor_heap[ord(r)].data[0] == 5.f);
-    r2_assert("20/4 == 5",  tensor_heap[ord(r)].data[1] == 5.f);
-    r2_assert("30/5 == 6",  tensor_heap[ord(r)].data[2] == 6.f);
+    L expr = cons(ts, atom(ts, "/"), cons(ts, va, cons(ts, vb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
+    r2_assert("10/2 == 5",  ts->tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("20/4 == 5",  ts->tensor_heap[ord(r)].data[1] == 5.f);
+    r2_assert("30/5 == 6",  ts->tensor_heap[ord(r)].data[2] == 6.f);
     return NULL;
 }
 
@@ -760,16 +760,16 @@ static const char *test_tensor_scalar_broadcast(void)
     float d[] = {1.f, 2.f, 3.f};
     L v = make_vec(3, d);
 
-    L add_expr = cons(atom("+"), cons(v, cons((L)10.0, l_nil)));
-    L ra = eval(add_expr, l_env);
-    r2_assert("broadcast + [0] == 11", tensor_heap[ord(ra)].data[0] == 11.f);
-    r2_assert("broadcast + [2] == 13", tensor_heap[ord(ra)].data[2] == 13.f);
+    L add_expr = cons(ts, atom(ts, "+"), cons(ts, v, cons(ts, (L)10.0, ts->l_nil)));
+    L ra = eval(ts, add_expr, ts->l_env);
+    r2_assert("broadcast + [0] == 11", ts->tensor_heap[ord(ra)].data[0] == 11.f);
+    r2_assert("broadcast + [2] == 13", ts->tensor_heap[ord(ra)].data[2] == 13.f);
 
-    L mul_expr = cons(atom("*"), cons(v, cons((L)2.0, l_nil)));
-    L rm = eval(mul_expr, l_env);
-    r2_assert("broadcast * [0] == 2",  tensor_heap[ord(rm)].data[0] == 2.f);
-    r2_assert("broadcast * [1] == 4",  tensor_heap[ord(rm)].data[1] == 4.f);
-    r2_assert("broadcast * [2] == 6",  tensor_heap[ord(rm)].data[2] == 6.f);
+    L mul_expr = cons(ts, atom(ts, "*"), cons(ts, v, cons(ts, (L)2.0, ts->l_nil)));
+    L rm = eval(ts, mul_expr, ts->l_env);
+    r2_assert("broadcast * [0] == 2",  ts->tensor_heap[ord(rm)].data[0] == 2.f);
+    r2_assert("broadcast * [1] == 4",  ts->tensor_heap[ord(rm)].data[1] == 4.f);
+    r2_assert("broadcast * [2] == 6",  ts->tensor_heap[ord(rm)].data[2] == 6.f);
     return NULL;
 }
 
@@ -785,12 +785,12 @@ static const char *test_tensor_mat_add(void)
     L ma = make_mat(2, 2, a);
     L mb = make_mat(2, 2, b);
 
-    L expr = cons(atom("+"), cons(ma, cons(mb, l_nil)));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "+"), cons(ts, ma, cons(ts, mb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("mat add is TENS",     T(r) == TENS);
-    r2_assert("mat add rank == 2",   tensor_heap[ord(r)].rank == 2);
-    r2_assert("mat [0,0] == 11",     tensor_heap[ord(r)].data[0] == 11.f);
-    r2_assert("mat [1,1] == 44",     tensor_heap[ord(r)].data[3] == 44.f);
+    r2_assert("mat add rank == 2",   ts->tensor_heap[ord(r)].rank == 2);
+    r2_assert("mat [0,0] == 11",     ts->tensor_heap[ord(r)].data[0] == 11.f);
+    r2_assert("mat [1,1] == 44",     ts->tensor_heap[ord(r)].data[3] == 44.f);
     return NULL;
 }
 
@@ -805,17 +805,17 @@ static const char *test_tensor_define(void)
     L v = make_vec(5, d);
 
     /* (define pi-vec [3 1 4 1 5]) */
-    L def = cons(atom("define"), cons(atom("pi-vec"), cons(v, l_nil)));
-    eval(def, l_env);
+    L def = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "pi-vec"), cons(ts, v, ts->l_nil)));
+    eval(ts, def, ts->l_env);
 
     /* (shape pi-vec) => [5] */
-    L shape_expr = cons(atom("shape"), cons(atom("pi-vec"), l_nil));
-    L sh = eval(shape_expr, l_env);
-    r2_assert("shape of pi-vec == [5]", tensor_heap[ord(sh)].data[0] == 5.f);
+    L shape_expr = cons(ts, atom(ts, "shape"), cons(ts, atom(ts, "pi-vec"), ts->l_nil));
+    L sh = eval(ts, shape_expr, ts->l_env);
+    r2_assert("shape of pi-vec == [5]", ts->tensor_heap[ord(sh)].data[0] == 5.f);
 
     /* (slice pi-vec 2) => 4 */
-    L sl = cons(atom("slice"), cons(atom("pi-vec"), cons((L)2.0, l_nil)));
-    r2_assert("slice 2 of pi-vec == 4", equ(eval(sl, l_env), (L)4.0));
+    L sl = cons(ts, atom(ts, "slice"), cons(ts, atom(ts, "pi-vec"), cons(ts, (L)2.0, ts->l_nil)));
+    r2_assert("slice 2 of pi-vec == 4", equ(eval(ts, sl, ts->l_env), (L)4.0));
     return NULL;
 }
 
@@ -832,14 +832,14 @@ static const char *test_tensor_matmul_square(void)
     L ma = make_mat(2, 2, a);
     L mb = make_mat(2, 2, b);
 
-    L expr = cons(atom("matmul"), cons(ma, cons(mb, l_nil)));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "matmul"), cons(ts, ma, cons(ts, mb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("matmul result is TENS",   T(r) == TENS);
-    r2_assert("matmul rank == 2",        tensor_heap[ord(r)].rank == 2);
-    r2_assert("[0,0] == 19",             tensor_heap[ord(r)].data[0] == 19.f);
-    r2_assert("[0,1] == 22",             tensor_heap[ord(r)].data[1] == 22.f);
-    r2_assert("[1,0] == 43",             tensor_heap[ord(r)].data[2] == 43.f);
-    r2_assert("[1,1] == 50",             tensor_heap[ord(r)].data[3] == 50.f);
+    r2_assert("matmul rank == 2",        ts->tensor_heap[ord(r)].rank == 2);
+    r2_assert("[0,0] == 19",             ts->tensor_heap[ord(r)].data[0] == 19.f);
+    r2_assert("[0,1] == 22",             ts->tensor_heap[ord(r)].data[1] == 22.f);
+    r2_assert("[1,0] == 43",             ts->tensor_heap[ord(r)].data[2] == 43.f);
+    r2_assert("[1,1] == 50",             ts->tensor_heap[ord(r)].data[3] == 50.f);
     return NULL;
 }
 
@@ -852,14 +852,14 @@ static const char *test_tensor_matmul_rect(void)
     L ma = make_mat(2, 3, a);
     L mb = make_mat(3, 2, b);
 
-    L expr = cons(atom("matmul"), cons(ma, cons(mb, l_nil)));
-    L r = eval(expr, l_env);
-    r2_assert("rect matmul shape[0] == 2", tensor_heap[ord(r)].shape[0] == 2);
-    r2_assert("rect matmul shape[1] == 2", tensor_heap[ord(r)].shape[1] == 2);
-    r2_assert("[0,0] == 58",               tensor_heap[ord(r)].data[0] == 58.f);
-    r2_assert("[0,1] == 64",               tensor_heap[ord(r)].data[1] == 64.f);
-    r2_assert("[1,0] == 139",              tensor_heap[ord(r)].data[2] == 139.f);
-    r2_assert("[1,1] == 154",              tensor_heap[ord(r)].data[3] == 154.f);
+    L expr = cons(ts, atom(ts, "matmul"), cons(ts, ma, cons(ts, mb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
+    r2_assert("rect matmul shape[0] == 2", ts->tensor_heap[ord(r)].shape[0] == 2);
+    r2_assert("rect matmul shape[1] == 2", ts->tensor_heap[ord(r)].shape[1] == 2);
+    r2_assert("[0,0] == 58",               ts->tensor_heap[ord(r)].data[0] == 58.f);
+    r2_assert("[0,1] == 64",               ts->tensor_heap[ord(r)].data[1] == 64.f);
+    r2_assert("[1,0] == 139",              ts->tensor_heap[ord(r)].data[2] == 139.f);
+    r2_assert("[1,1] == 154",              ts->tensor_heap[ord(r)].data[3] == 154.f);
     return NULL;
 }
 
@@ -872,12 +872,12 @@ static const char *test_tensor_matmul_matvec(void)
     L ma = make_mat(2, 3, a);
     L mv = make_vec(3, v);
 
-    L expr = cons(atom("matmul"), cons(ma, cons(mv, l_nil)));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "matmul"), cons(ts, ma, cons(ts, mv, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("mat-vec result is TENS",  T(r) == TENS);
-    r2_assert("mat-vec rank == 1",       tensor_heap[ord(r)].rank == 1);
-    r2_assert("result[0] == 1",          tensor_heap[ord(r)].data[0] == 1.f);
-    r2_assert("result[1] == 4",          tensor_heap[ord(r)].data[1] == 4.f);
+    r2_assert("mat-vec rank == 1",       ts->tensor_heap[ord(r)].rank == 1);
+    r2_assert("result[0] == 1",          ts->tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("result[1] == 4",          ts->tensor_heap[ord(r)].data[1] == 4.f);
     return NULL;
 }
 
@@ -890,12 +890,12 @@ static const char *test_tensor_matmul_vecmat(void)
     L mv = make_vec(3, v);
     L mb = make_mat(3, 2, b);
 
-    L expr = cons(atom("@"), cons(mv, cons(mb, l_nil)));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "@"), cons(ts, mv, cons(ts, mb, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("vec-mat result is TENS",  T(r) == TENS);
-    r2_assert("vec-mat rank == 1",       tensor_heap[ord(r)].rank == 1);
-    r2_assert("result[0] == 7",          tensor_heap[ord(r)].data[0] == 7.f);
-    r2_assert("result[1] == 11",         tensor_heap[ord(r)].data[1] == 11.f);
+    r2_assert("vec-mat rank == 1",       ts->tensor_heap[ord(r)].rank == 1);
+    r2_assert("result[0] == 7",          ts->tensor_heap[ord(r)].data[0] == 7.f);
+    r2_assert("result[1] == 11",         ts->tensor_heap[ord(r)].data[1] == 11.f);
     return NULL;
 }
 
@@ -906,15 +906,15 @@ static const char *test_tensor_transpose(void)
     float a[] = {1.f, 2.f, 3.f, 4.f, 5.f, 6.f};
     L m = make_mat(2, 3, a);
 
-    L expr = cons(atom("transpose"), cons(m, l_nil));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "transpose"), cons(ts, m, ts->l_nil));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("transpose is TENS",       T(r) == TENS);
-    r2_assert("transpose shape[0] == 3", tensor_heap[ord(r)].shape[0] == 3);
-    r2_assert("transpose shape[1] == 2", tensor_heap[ord(r)].shape[1] == 2);
-    r2_assert("[0,0] == 1",              tensor_heap[ord(r)].data[0] == 1.f);
-    r2_assert("[0,1] == 4",              tensor_heap[ord(r)].data[1] == 4.f);
-    r2_assert("[1,0] == 2",              tensor_heap[ord(r)].data[2] == 2.f);
-    r2_assert("[2,1] == 6",              tensor_heap[ord(r)].data[5] == 6.f);
+    r2_assert("transpose shape[0] == 3", ts->tensor_heap[ord(r)].shape[0] == 3);
+    r2_assert("transpose shape[1] == 2", ts->tensor_heap[ord(r)].shape[1] == 2);
+    r2_assert("[0,0] == 1",              ts->tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("[0,1] == 4",              ts->tensor_heap[ord(r)].data[1] == 4.f);
+    r2_assert("[1,0] == 2",              ts->tensor_heap[ord(r)].data[2] == 2.f);
+    r2_assert("[2,1] == 6",              ts->tensor_heap[ord(r)].data[5] == 6.f);
     return NULL;
 }
 
@@ -927,10 +927,10 @@ static const char *test_tensor_abs(void)
     setup();
     float d[] = {-3.f, 1.f, -2.f};
     L v = make_vec(3, d);
-    L r = eval(cons(atom("abs"), cons(v, l_nil)), l_env);
-    r2_assert("abs[0] == 3", tensor_heap[ord(r)].data[0] == 3.f);
-    r2_assert("abs[1] == 1", tensor_heap[ord(r)].data[1] == 1.f);
-    r2_assert("abs[2] == 2", tensor_heap[ord(r)].data[2] == 2.f);
+    L r = eval(ts, cons(ts, atom(ts, "abs"), cons(ts, v, ts->l_nil)), ts->l_env);
+    r2_assert("abs[0] == 3", ts->tensor_heap[ord(r)].data[0] == 3.f);
+    r2_assert("abs[1] == 1", ts->tensor_heap[ord(r)].data[1] == 1.f);
+    r2_assert("abs[2] == 2", ts->tensor_heap[ord(r)].data[2] == 2.f);
     return NULL;
 }
 
@@ -939,10 +939,10 @@ static const char *test_tensor_sqrt(void)
     setup();
     float d[] = {4.f, 9.f, 16.f};
     L v = make_vec(3, d);
-    L r = eval(cons(atom("sqrt"), cons(v, l_nil)), l_env);
-    r2_assert("sqrt[0] == 2", tensor_heap[ord(r)].data[0] == 2.f);
-    r2_assert("sqrt[1] == 3", tensor_heap[ord(r)].data[1] == 3.f);
-    r2_assert("sqrt[2] == 4", tensor_heap[ord(r)].data[2] == 4.f);
+    L r = eval(ts, cons(ts, atom(ts, "sqrt"), cons(ts, v, ts->l_nil)), ts->l_env);
+    r2_assert("sqrt[0] == 2", ts->tensor_heap[ord(r)].data[0] == 2.f);
+    r2_assert("sqrt[1] == 3", ts->tensor_heap[ord(r)].data[1] == 3.f);
+    r2_assert("sqrt[2] == 4", ts->tensor_heap[ord(r)].data[2] == 4.f);
     return NULL;
 }
 
@@ -951,9 +951,9 @@ static const char *test_tensor_normalize(void)
     setup();
     float d[] = {3.f, 4.f};
     L v = make_vec(2, d);
-    L r = eval(cons(atom("normalize"), cons(v, l_nil)), l_env);
-    r2_assert("normalize[0] == 0.6", tensor_heap[ord(r)].data[0] == 0.6f);
-    r2_assert("normalize[1] == 0.8", tensor_heap[ord(r)].data[1] == 0.8f);
+    L r = eval(ts, cons(ts, atom(ts, "normalize"), cons(ts, v, ts->l_nil)), ts->l_env);
+    r2_assert("normalize[0] == 0.6", ts->tensor_heap[ord(r)].data[0] == 0.6f);
+    r2_assert("normalize[1] == 0.8", ts->tensor_heap[ord(r)].data[1] == 0.8f);
     return NULL;
 }
 
@@ -962,21 +962,21 @@ static const char *test_tensor_pow(void)
     setup();
     float d[] = {2.f, 3.f, 4.f};
     L v = make_vec(3, d);
-    L r = eval(cons(atom("pow"), cons(v, cons((L)2.0, l_nil))), l_env);
-    r2_assert("pow[0] == 4",  tensor_heap[ord(r)].data[0] == 4.f);
-    r2_assert("pow[1] == 9",  tensor_heap[ord(r)].data[1] == 9.f);
-    r2_assert("pow[2] == 16", tensor_heap[ord(r)].data[2] == 16.f);
+    L r = eval(ts, cons(ts, atom(ts, "pow"), cons(ts, v, cons(ts, (L)2.0, ts->l_nil))), ts->l_env);
+    r2_assert("pow[0] == 4",  ts->tensor_heap[ord(r)].data[0] == 4.f);
+    r2_assert("pow[1] == 9",  ts->tensor_heap[ord(r)].data[1] == 9.f);
+    r2_assert("pow[2] == 16", ts->tensor_heap[ord(r)].data[2] == 16.f);
     return NULL;
 }
 
 static const char *test_tensor_zero(void)
 {
     setup();
-    L r = eval(cons(atom("zero"), cons((L)4.0, l_nil)), l_env);
+    L r = eval(ts, cons(ts, atom(ts, "zero"), cons(ts, (L)4.0, ts->l_nil)), ts->l_env);
     r2_assert("zero is TENS",     T(r) == TENS);
-    r2_assert("zero len == 4",    tensor_heap[ord(r)].len == 4);
-    r2_assert("zero[0] == 0",     tensor_heap[ord(r)].data[0] == 0.f);
-    r2_assert("zero[3] == 0",     tensor_heap[ord(r)].data[3] == 0.f);
+    r2_assert("zero len == 4",    ts->tensor_heap[ord(r)].len == 4);
+    r2_assert("zero[0] == 0",     ts->tensor_heap[ord(r)].data[0] == 0.f);
+    r2_assert("zero[3] == 0",     ts->tensor_heap[ord(r)].data[3] == 0.f);
     return NULL;
 }
 
@@ -986,7 +986,7 @@ static const char *test_tensor_dot(void)
     float a[] = {1.f, 2.f, 3.f};
     float b[] = {4.f, 5.f, 6.f};
     L va = make_vec(3, a), vb = make_vec(3, b);
-    L r = eval(cons(atom("dot"), cons(va, cons(vb, l_nil))), l_env);
+    L r = eval(ts, cons(ts, atom(ts, "dot"), cons(ts, va, cons(ts, vb, ts->l_nil))), ts->l_env);
     r2_assert("dot [1 2 3].[4 5 6] == 32", equ(r, (L)32.0));
     return NULL;
 }
@@ -996,8 +996,8 @@ static const char *test_tensor_length(void)
     setup();
     float d[] = {3.f, 4.f};
     L v = make_vec(2, d);
-    L len  = eval(cons(atom("norm"),  cons(v, l_nil)), l_env);
-    L len2 = eval(cons(atom("norm2"), cons(v, l_nil)), l_env);
+    L len  = eval(ts, cons(ts, atom(ts, "norm"),  cons(ts, v, ts->l_nil)), ts->l_env);
+    L len2 = eval(ts, cons(ts, atom(ts, "norm2"), cons(ts, v, ts->l_nil)), ts->l_env);
     r2_assert("norm [3 4] == 5",   equ(len,  (L)5.0));
     r2_assert("norm2 [3 4] == 25", equ(len2, (L)25.0));
     return NULL;
@@ -1009,8 +1009,8 @@ static const char *test_tensor_dist(void)
     float a[] = {0.f, 0.f};
     float b[] = {3.f, 4.f};
     L va = make_vec(2, a), vb = make_vec(2, b);
-    L d  = eval(cons(atom("dist"),  cons(va, cons(vb, l_nil))), l_env);
-    L d2 = eval(cons(atom("dist2"), cons(va, cons(vb, l_nil))), l_env);
+    L d  = eval(ts, cons(ts, atom(ts, "dist"),  cons(ts, va, cons(ts, vb, ts->l_nil))), ts->l_env);
+    L d2 = eval(ts, cons(ts, atom(ts, "dist2"), cons(ts, va, cons(ts, vb, ts->l_nil))), ts->l_env);
     r2_assert("dist [0 0] [3 4] == 5",   equ(d,  (L)5.0));
     r2_assert("dist2 [0 0] [3 4] == 25", equ(d2, (L)25.0));
     return NULL;
@@ -1023,10 +1023,10 @@ static const char *test_tensor_veq(void)
     float b[] = {1.f, 2.f, 3.f};
     float c[] = {1.f, 2.f, 4.f};
     L va = make_vec(3, a), vb = make_vec(3, b), vc = make_vec(3, c);
-    L eq  = eval(cons(atom("equalp"), cons(va, cons(vb, l_nil))), l_env);
-    L neq = eval(cons(atom("equalp"), cons(va, cons(vc, l_nil))), l_env);
-    r2_assert("equalp equal tensors is #t",     equ(eq, l_tru));
-    r2_assert("equalp unequal tensors is nil",  equ(neq, l_nil));
+    L eq  = eval(ts, cons(ts, atom(ts, "equalp"), cons(ts, va, cons(ts, vb, ts->l_nil))), ts->l_env);
+    L neq = eval(ts, cons(ts, atom(ts, "equalp"), cons(ts, va, cons(ts, vc, ts->l_nil))), ts->l_env);
+    r2_assert("equalp equal tensors is #t",     equ(eq, ts->l_tru));
+    r2_assert("equalp unequal tensors is nil",  equ(neq, ts->l_nil));
     return NULL;
 }
 
@@ -1040,14 +1040,14 @@ static const char *test_tensor_head_tail_vec(void)
     float d[] = {10.f, 20.f, 30.f};
     L v = make_vec(3, d);
 
-    L h = eval(cons(atom("first"), cons(v, l_nil)), l_env);
+    L h = eval(ts, cons(ts, atom(ts, "first"), cons(ts, v, ts->l_nil)), ts->l_env);
     r2_assert("first of vec == 10", equ(h, (L)10.0));
 
-    L tl = eval(cons(atom("rest"), cons(v, l_nil)), l_env);
+    L tl = eval(ts, cons(ts, atom(ts, "rest"), cons(ts, v, ts->l_nil)), ts->l_env);
     r2_assert("rest is TENS",        T(tl) == TENS);
-    r2_assert("rest len == 2",       tensor_heap[ord(tl)].len == 2);
-    r2_assert("rest[0] == 20",       tensor_heap[ord(tl)].data[0] == 20.f);
-    r2_assert("rest[1] == 30",       tensor_heap[ord(tl)].data[1] == 30.f);
+    r2_assert("rest len == 2",       ts->tensor_heap[ord(tl)].len == 2);
+    r2_assert("rest[0] == 20",       ts->tensor_heap[ord(tl)].data[0] == 20.f);
+    r2_assert("rest[1] == 30",       ts->tensor_heap[ord(tl)].data[1] == 30.f);
     return NULL;
 }
 
@@ -1058,18 +1058,18 @@ static const char *test_tensor_head_tail_mat(void)
     L m = make_mat(2, 3, d);
 
     /* first of 2x3 => first row [1 2 3] */
-    L h = eval(cons(atom("first"), cons(m, l_nil)), l_env);
+    L h = eval(ts, cons(ts, atom(ts, "first"), cons(ts, m, ts->l_nil)), ts->l_env);
     r2_assert("first of mat is TENS",     T(h) == TENS);
-    r2_assert("first row rank == 1",      tensor_heap[ord(h)].rank == 1);
-    r2_assert("first row[0] == 1",        tensor_heap[ord(h)].data[0] == 1.f);
-    r2_assert("first row[2] == 3",        tensor_heap[ord(h)].data[2] == 3.f);
+    r2_assert("first row rank == 1",      ts->tensor_heap[ord(h)].rank == 1);
+    r2_assert("first row[0] == 1",        ts->tensor_heap[ord(h)].data[0] == 1.f);
+    r2_assert("first row[2] == 3",        ts->tensor_heap[ord(h)].data[2] == 3.f);
 
     /* rest of 2x3 => [[4 5 6]] (1x3) */
-    L tl = eval(cons(atom("rest"), cons(m, l_nil)), l_env);
+    L tl = eval(ts, cons(ts, atom(ts, "rest"), cons(ts, m, ts->l_nil)), ts->l_env);
     r2_assert("rest of mat is TENS",     T(tl) == TENS);
-    r2_assert("rest shape[0] == 1",      tensor_heap[ord(tl)].shape[0] == 1);
-    r2_assert("rest shape[1] == 3",      tensor_heap[ord(tl)].shape[1] == 3);
-    r2_assert("rest[0][0] == 4",         tensor_heap[ord(tl)].data[0] == 4.f);
+    r2_assert("rest shape[0] == 1",      ts->tensor_heap[ord(tl)].shape[0] == 1);
+    r2_assert("rest shape[1] == 3",      ts->tensor_heap[ord(tl)].shape[1] == 3);
+    r2_assert("rest[0][0] == 4",         ts->tensor_heap[ord(tl)].data[0] == 4.f);
     return NULL;
 }
 
@@ -1084,15 +1084,15 @@ static const char *test_tensor_fastpath_vec2(void)
     float b[] = {0.f, 0.f};
     L va = make_vec(2, a), vb = make_vec(2, b);
 
-    r2_assert("dot vec2",    equ(eval(cons(atom("dot"),   cons(va, cons(va, l_nil))), l_env), (L)25.0));
-    r2_assert("norm vec2",   equ(eval(cons(atom("norm"),  cons(va, l_nil)),           l_env), (L)5.0));
-    r2_assert("norm2 vec2",  equ(eval(cons(atom("norm2"), cons(va, l_nil)),           l_env), (L)25.0));
-    r2_assert("dist vec2",    equ(eval(cons(atom("dist"),    cons(vb, cons(va, l_nil))), l_env), (L)5.0));
-    r2_assert("dist2 vec2",   equ(eval(cons(atom("dist2"),   cons(vb, cons(va, l_nil))), l_env), (L)25.0));
+    r2_assert("dot vec2",    equ(eval(ts, cons(ts, atom(ts, "dot"),   cons(ts, va, cons(ts, va, ts->l_nil))), ts->l_env), (L)25.0));
+    r2_assert("norm vec2",   equ(eval(ts, cons(ts, atom(ts, "norm"),  cons(ts, va, ts->l_nil)),           ts->l_env), (L)5.0));
+    r2_assert("norm2 vec2",  equ(eval(ts, cons(ts, atom(ts, "norm2"), cons(ts, va, ts->l_nil)),           ts->l_env), (L)25.0));
+    r2_assert("dist vec2",    equ(eval(ts, cons(ts, atom(ts, "dist"),    cons(ts, vb, cons(ts, va, ts->l_nil))), ts->l_env), (L)5.0));
+    r2_assert("dist2 vec2",   equ(eval(ts, cons(ts, atom(ts, "dist2"),   cons(ts, vb, cons(ts, va, ts->l_nil))), ts->l_env), (L)25.0));
 
-    L n = eval(cons(atom("normalize"), cons(va, l_nil)), l_env);
-    r2_assert("normalize vec2[0] == 0.6", tensor_heap[ord(n)].data[0] == 0.6f);
-    r2_assert("normalize vec2[1] == 0.8", tensor_heap[ord(n)].data[1] == 0.8f);
+    L n = eval(ts, cons(ts, atom(ts, "normalize"), cons(ts, va, ts->l_nil)), ts->l_env);
+    r2_assert("normalize vec2[0] == 0.6", ts->tensor_heap[ord(n)].data[0] == 0.6f);
+    r2_assert("normalize vec2[1] == 0.8", ts->tensor_heap[ord(n)].data[1] == 0.8f);
     return NULL;
 }
 
@@ -1103,21 +1103,21 @@ static const char *test_tensor_fastpath_vec4(void)
     float b[] = {0.f, 1.f, 0.f, 0.f};
     L va = make_vec(4, a), vb = make_vec(4, b);
 
-    r2_assert("dot vec4 orthogonal == 0", equ(eval(cons(atom("dot"), cons(va, cons(vb, l_nil))), l_env), (L)0.0));
-    r2_assert("norm vec4 unit == 1",    equ(eval(cons(atom("norm"), cons(va, l_nil)), l_env), (L)1.0));
+    r2_assert("dot vec4 orthogonal == 0", equ(eval(ts, cons(ts, atom(ts, "dot"), cons(ts, va, cons(ts, vb, ts->l_nil))), ts->l_env), (L)0.0));
+    r2_assert("norm vec4 unit == 1",    equ(eval(ts, cons(ts, atom(ts, "norm"), cons(ts, va, ts->l_nil)), ts->l_env), (L)1.0));
 
     float c[] = {-1.f, 4.f, -9.f, 16.f};
     L vc = make_vec(4, c);
-    L ab = eval(cons(atom("abs"),  cons(vc, l_nil)), l_env);
-    L sq = eval(cons(atom("sqrt"), cons(vc, l_nil)), l_env);  /* sqrt of abs vals */
-    r2_assert("abs vec4[0] == 1",  tensor_heap[ord(ab)].data[0] == 1.f);
-    r2_assert("abs vec4[2] == 9",  tensor_heap[ord(ab)].data[2] == 9.f);
+    L ab = eval(ts, cons(ts, atom(ts, "abs"),  cons(ts, vc, ts->l_nil)), ts->l_env);
+    L sq = eval(ts, cons(ts, atom(ts, "sqrt"), cons(ts, vc, ts->l_nil)), ts->l_env);  /* sqrt of abs vals */
+    r2_assert("abs vec4[0] == 1",  ts->tensor_heap[ord(ab)].data[0] == 1.f);
+    r2_assert("abs vec4[2] == 9",  ts->tensor_heap[ord(ab)].data[2] == 9.f);
 
     float pos[] = {4.f, 9.f, 16.f, 25.f};
     L vp = make_vec(4, pos);
-    L sr = eval(cons(atom("sqrt"), cons(vp, l_nil)), l_env);
-    r2_assert("sqrt vec4[0] == 2", tensor_heap[ord(sr)].data[0] == 2.f);
-    r2_assert("sqrt vec4[3] == 5", tensor_heap[ord(sr)].data[3] == 5.f);
+    L sr = eval(ts, cons(ts, atom(ts, "sqrt"), cons(ts, vp, ts->l_nil)), ts->l_env);
+    r2_assert("sqrt vec4[0] == 2", ts->tensor_heap[ord(sr)].data[0] == 2.f);
+    r2_assert("sqrt vec4[3] == 5", ts->tensor_heap[ord(sr)].data[3] == 5.f);
     (void)sq; (void)ab;
     return NULL;
 }
@@ -1131,35 +1131,35 @@ static const char *test_utf8_atoms_as_values(void)
     setup();
 
     /* store a number under a multi-byte key, retrieve it */
-    L def1 = cons(atom("define"),
-                  cons(atom("\xE4\xBB\x96"), cons((L)3.0, l_nil))); /* 他 */
-    eval(def1, l_env);
+    L def1 = cons(ts, atom(ts, "define"),
+                  cons(ts, atom(ts, "\xE4\xBB\x96"), cons(ts, (L)3.0, ts->l_nil))); /* 他 */
+    eval(ts, def1, ts->l_env);
     r2_assert("CJK atom as value",
-              equ(eval(atom("\xE4\xBB\x96"), l_env), (L)3.0));
+              equ(eval(ts, atom(ts, "\xE4\xBB\x96"), ts->l_env), (L)3.0));
 
     /* use in arithmetic */
-    L add = cons(atom("+"),
-                 cons(atom("\xE4\xBB\x96"), cons((L)1.0, l_nil)));
+    L add = cons(ts, atom(ts, "+"),
+                 cons(ts, atom(ts, "\xE4\xBB\x96"), cons(ts, (L)1.0, ts->l_nil)));
     r2_assert("CJK atom in arithmetic",
-              equ(eval(add, l_env), (L)4.0));
+              equ(eval(ts, add, ts->l_env), (L)4.0));
 
     /* store under emoji, use in expression */
-    L def2 = cons(atom("define"),
-                  cons(atom("\xF0\x9F\x94\xA5"), cons((L)100.0, l_nil))); /* 🔥 */
-    eval(def2, l_env);
-    L mul = cons(atom("*"),
-                 cons(atom("\xF0\x9F\x94\xA5"), cons((L)2.0, l_nil)));
+    L def2 = cons(ts, atom(ts, "define"),
+                  cons(ts, atom(ts, "\xF0\x9F\x94\xA5"), cons(ts, (L)100.0, ts->l_nil))); /* 🔥 */
+    eval(ts, def2, ts->l_env);
+    L mul = cons(ts, atom(ts, "*"),
+                 cons(ts, atom(ts, "\xF0\x9F\x94\xA5"), cons(ts, (L)2.0, ts->l_nil)));
     r2_assert("emoji atom in arithmetic",
-              equ(eval(mul, l_env), (L)200.0));
+              equ(eval(ts, mul, ts->l_env), (L)200.0));
 
     /* store a tensor under a multi-byte name */
     float d[] = {1.f, 2.f, 3.f};
     L v = make_vec(3, d);
-    L def3 = cons(atom("define"), cons(atom("\xCF\x80\xCF\x80"), cons(v, l_nil))); /* ππ */
-    eval(def3, l_env);
-    L sh = eval(cons(atom("shape"), cons(atom("\xCF\x80\xCF\x80"), l_nil)), l_env);
+    L def3 = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "\xCF\x80\xCF\x80"), cons(ts, v, ts->l_nil))); /* ππ */
+    eval(ts, def3, ts->l_env);
+    L sh = eval(ts, cons(ts, atom(ts, "shape"), cons(ts, atom(ts, "\xCF\x80\xCF\x80"), ts->l_nil)), ts->l_env);
     r2_assert("multi-byte atom stores tensor",
-              tensor_heap[ord(sh)].data[0] == 3.f);
+              ts->tensor_heap[ord(sh)].data[0] == 3.f);
 
     return NULL;
 }
@@ -1172,7 +1172,7 @@ static const char *test_eval_undefined(void)
 {
     setup();
     r2_assert("unknown atom returns L_ERR",
-              equ(eval(atom("undefined-xyz"), l_env), l_err));
+              equ(eval(ts, atom(ts, "undefined-xyz"), ts->l_env), ts->l_err));
     return NULL;
 }
 
@@ -1184,14 +1184,14 @@ static const char *test_make_tensor_scalars(void)
 {
     setup();
     /* (make-tensor 1 2 3) - three scalars become a rank-1 vector */
-    L expr = cons(atom("make-tensor"), cons((L)1.0, cons((L)2.0, cons((L)3.0, l_nil))));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "make-tensor"), cons(ts, (L)1.0, cons(ts, (L)2.0, cons(ts, (L)3.0, ts->l_nil))));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("scalars: is TENS",    T(r) == TENS);
-    r2_assert("scalars: rank == 1",  tensor_heap[ord(r)].rank == 1);
-    r2_assert("scalars: len == 3",   tensor_heap[ord(r)].len == 3);
-    r2_assert("scalars: data[0]==1", tensor_heap[ord(r)].data[0] == 1.f);
-    r2_assert("scalars: data[1]==2", tensor_heap[ord(r)].data[1] == 2.f);
-    r2_assert("scalars: data[2]==3", tensor_heap[ord(r)].data[2] == 3.f);
+    r2_assert("scalars: rank == 1",  ts->tensor_heap[ord(r)].rank == 1);
+    r2_assert("scalars: len == 3",   ts->tensor_heap[ord(r)].len == 3);
+    r2_assert("scalars: data[0]==1", ts->tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("scalars: data[1]==2", ts->tensor_heap[ord(r)].data[1] == 2.f);
+    r2_assert("scalars: data[2]==3", ts->tensor_heap[ord(r)].data[2] == 3.f);
     return NULL;
 }
 
@@ -1199,12 +1199,12 @@ static const char *test_make_tensor_expr(void)
 {
     setup();
     /* (make-tensor (+ 1 2) 4) - s-expression as a tensor element */
-    L add  = cons(atom("+"), cons((L)1.0, cons((L)2.0, l_nil)));
-    L expr = cons(atom("make-tensor"), cons(add, cons((L)4.0, l_nil)));
-    L r = eval(expr, l_env);
+    L add  = cons(ts, atom(ts, "+"), cons(ts, (L)1.0, cons(ts, (L)2.0, ts->l_nil)));
+    L expr = cons(ts, atom(ts, "make-tensor"), cons(ts, add, cons(ts, (L)4.0, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("expr: is TENS",    T(r) == TENS);
-    r2_assert("expr: data[0]==3", tensor_heap[ord(r)].data[0] == 3.f);
-    r2_assert("expr: data[1]==4", tensor_heap[ord(r)].data[1] == 4.f);
+    r2_assert("expr: data[0]==3", ts->tensor_heap[ord(r)].data[0] == 3.f);
+    r2_assert("expr: data[1]==4", ts->tensor_heap[ord(r)].data[1] == 4.f);
     return NULL;
 }
 
@@ -1212,14 +1212,14 @@ static const char *test_make_tensor_var(void)
 {
     setup();
     /* (define x 5) then (make-tensor x 2 3) - variable lookup inside tensor */
-    L def  = cons(atom("define"), cons(atom("x"), cons((L)5.0, l_nil)));
-    eval(def, l_env);
-    L expr = cons(atom("make-tensor"), cons(atom("x"), cons((L)2.0, cons((L)3.0, l_nil))));
-    L r = eval(expr, l_env);
+    L def  = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "x"), cons(ts, (L)5.0, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L expr = cons(ts, atom(ts, "make-tensor"), cons(ts, atom(ts, "x"), cons(ts, (L)2.0, cons(ts, (L)3.0, ts->l_nil))));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("var: is TENS",    T(r) == TENS);
-    r2_assert("var: data[0]==5", tensor_heap[ord(r)].data[0] == 5.f);
-    r2_assert("var: data[1]==2", tensor_heap[ord(r)].data[1] == 2.f);
-    r2_assert("var: data[2]==3", tensor_heap[ord(r)].data[2] == 3.f);
+    r2_assert("var: data[0]==5", ts->tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("var: data[1]==2", ts->tensor_heap[ord(r)].data[1] == 2.f);
+    r2_assert("var: data[2]==3", ts->tensor_heap[ord(r)].data[2] == 3.f);
     return NULL;
 }
 
@@ -1227,16 +1227,16 @@ static const char *test_make_tensor_stack(void)
 {
     setup();
     /* (make-tensor (make-tensor 1 2) (make-tensor 3 4)) - stacks rows into [[1 2][3 4]] */
-    L row0 = cons(atom("make-tensor"), cons((L)1.0, cons((L)2.0, l_nil)));
-    L row1 = cons(atom("make-tensor"), cons((L)3.0, cons((L)4.0, l_nil)));
-    L expr = cons(atom("make-tensor"), cons(row0, cons(row1, l_nil)));
-    L r = eval(expr, l_env);
+    L row0 = cons(ts, atom(ts, "make-tensor"), cons(ts, (L)1.0, cons(ts, (L)2.0, ts->l_nil)));
+    L row1 = cons(ts, atom(ts, "make-tensor"), cons(ts, (L)3.0, cons(ts, (L)4.0, ts->l_nil)));
+    L expr = cons(ts, atom(ts, "make-tensor"), cons(ts, row0, cons(ts, row1, ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("stack: is TENS",       T(r) == TENS);
-    r2_assert("stack: rank == 2",     tensor_heap[ord(r)].rank == 2);
-    r2_assert("stack: shape[0] == 2", tensor_heap[ord(r)].shape[0] == 2);
-    r2_assert("stack: shape[1] == 2", tensor_heap[ord(r)].shape[1] == 2);
-    r2_assert("stack: data[0] == 1",  tensor_heap[ord(r)].data[0] == 1.f);
-    r2_assert("stack: data[3] == 4",  tensor_heap[ord(r)].data[3] == 4.f);
+    r2_assert("stack: rank == 2",     ts->tensor_heap[ord(r)].rank == 2);
+    r2_assert("stack: shape[0] == 2", ts->tensor_heap[ord(r)].shape[0] == 2);
+    r2_assert("stack: shape[1] == 2", ts->tensor_heap[ord(r)].shape[1] == 2);
+    r2_assert("stack: data[0] == 1",  ts->tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("stack: data[3] == 4",  ts->tensor_heap[ord(r)].data[3] == 4.f);
     return NULL;
 }
 
@@ -1244,14 +1244,14 @@ static const char *test_make_tensor_expr_in_matrix(void)
 {
     setup();
     /* The motivating use case: define x=3, build [(+ 3 x) x] which should give [6 3] */
-    L def  = cons(atom("define"), cons(atom("x"), cons((L)3.0, l_nil)));
-    eval(def, l_env);
-    L add  = cons(atom("+"), cons((L)3.0, cons(atom("x"), l_nil)));
-    L expr = cons(atom("make-tensor"), cons(add, cons(atom("x"), l_nil)));
-    L r = eval(expr, l_env);
+    L def  = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "x"), cons(ts, (L)3.0, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L add  = cons(ts, atom(ts, "+"), cons(ts, (L)3.0, cons(ts, atom(ts, "x"), ts->l_nil)));
+    L expr = cons(ts, atom(ts, "make-tensor"), cons(ts, add, cons(ts, atom(ts, "x"), ts->l_nil)));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("mat-expr: is TENS",    T(r) == TENS);
-    r2_assert("mat-expr: data[0]==6", tensor_heap[ord(r)].data[0] == 6.f);
-    r2_assert("mat-expr: data[1]==3", tensor_heap[ord(r)].data[1] == 3.f);
+    r2_assert("mat-expr: data[0]==6", ts->tensor_heap[ord(r)].data[0] == 6.f);
+    r2_assert("mat-expr: data[1]==3", ts->tensor_heap[ord(r)].data[1] == 3.f);
     return NULL;
 }
 
@@ -1263,12 +1263,12 @@ static const char *test_eval_quoted_tensor(void)
 {
     setup();
     /* (eval '[1 2 3]) - quote prevents evaluation, eval triggers it */
-    L mt   = cons(atom("make-tensor"), cons((L)1.0, cons((L)2.0, cons((L)3.0, l_nil))));
-    L expr = cons(atom("eval"), cons(cons(atom("quote"), cons(mt, l_nil)), l_nil));
-    L r = eval(expr, l_env);
+    L mt   = cons(ts, atom(ts, "make-tensor"), cons(ts, (L)1.0, cons(ts, (L)2.0, cons(ts, (L)3.0, ts->l_nil))));
+    L expr = cons(ts, atom(ts, "eval"), cons(ts, cons(ts, atom(ts, "quote"), cons(ts, mt, ts->l_nil)), ts->l_nil));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("quoted eval: is TENS",    T(r) == TENS);
-    r2_assert("quoted eval: data[0]==1", tensor_heap[ord(r)].data[0] == 1.f);
-    r2_assert("quoted eval: data[2]==3", tensor_heap[ord(r)].data[2] == 3.f);
+    r2_assert("quoted eval: data[0]==1", ts->tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("quoted eval: data[2]==3", ts->tensor_heap[ord(r)].data[2] == 3.f);
     return NULL;
 }
 
@@ -1277,19 +1277,19 @@ static const char *test_define_code_eval_later(void)
     setup();
     /* (define code '[(+ 3 x) x]) then (define x 4) then (eval code)
        the expression is stored unevaluated and uses whatever x is at eval time */
-    L mt     = cons(atom("make-tensor"),
-                    cons(cons(atom("+"), cons((L)3.0, cons(atom("x"), l_nil))),
-                         cons(atom("x"), l_nil)));
-    L def_code = cons(atom("define"),
-                      cons(atom("code"), cons(cons(atom("quote"), cons(mt, l_nil)), l_nil)));
-    eval(def_code, l_env);
-    L def_x = cons(atom("define"), cons(atom("x"), cons((L)4.0, l_nil)));
-    eval(def_x, l_env);
-    L expr = cons(atom("eval"), cons(atom("code"), l_nil));
-    L r = eval(expr, l_env);
-    r2_assert("defl_erred: is TENS",    T(r) == TENS);
-    r2_assert("defl_erred: data[0]==7", tensor_heap[ord(r)].data[0] == 7.f);
-    r2_assert("defl_erred: data[1]==4", tensor_heap[ord(r)].data[1] == 4.f);
+    L mt     = cons(ts, atom(ts, "make-tensor"),
+                    cons(ts, cons(ts, atom(ts, "+"), cons(ts, (L)3.0, cons(ts, atom(ts, "x"), ts->l_nil))),
+                         cons(ts, atom(ts, "x"), ts->l_nil)));
+    L def_code = cons(ts, atom(ts, "define"),
+                      cons(ts, atom(ts, "code"), cons(ts, cons(ts, atom(ts, "quote"), cons(ts, mt, ts->l_nil)), ts->l_nil)));
+    eval(ts, def_code, ts->l_env);
+    L def_x = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "x"), cons(ts, (L)4.0, ts->l_nil)));
+    eval(ts, def_x, ts->l_env);
+    L expr = cons(ts, atom(ts, "eval"), cons(ts, atom(ts, "code"), ts->l_nil));
+    L r = eval(ts, expr, ts->l_env);
+    r2_assert("defts->l_erred: is TENS",    T(r) == TENS);
+    r2_assert("defts->l_erred: data[0]==7", ts->tensor_heap[ord(r)].data[0] == 7.f);
+    r2_assert("defts->l_erred: data[1]==4", ts->tensor_heap[ord(r)].data[1] == 4.f);
     return NULL;
 }
 
@@ -1297,17 +1297,17 @@ static const char *test_lambda_tensor_body(void)
 {
     setup();
     /* (define make-row (lambda (a b) [a b])) then (make-row 5 6) => [5 6] */
-    L body = cons(atom("make-tensor"), cons(atom("a"), cons(atom("b"), l_nil)));
-    L lam  = cons(atom("lambda"),
-                  cons(cons(atom("a"), cons(atom("b"), l_nil)),
-                       cons(body, l_nil)));
-    L def  = cons(atom("define"), cons(atom("make-row"), cons(lam, l_nil)));
-    eval(def, l_env);
-    L call = cons(atom("make-row"), cons((L)5.0, cons((L)6.0, l_nil)));
-    L r = eval(call, l_env);
+    L body = cons(ts, atom(ts, "make-tensor"), cons(ts, atom(ts, "a"), cons(ts, atom(ts, "b"), ts->l_nil)));
+    L lam  = cons(ts, atom(ts, "lambda"),
+                  cons(ts, cons(ts, atom(ts, "a"), cons(ts, atom(ts, "b"), ts->l_nil)),
+                       cons(ts, body, ts->l_nil)));
+    L def  = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "make-row"), cons(ts, lam, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L call = cons(ts, atom(ts, "make-row"), cons(ts, (L)5.0, cons(ts, (L)6.0, ts->l_nil)));
+    L r = eval(ts, call, ts->l_env);
     r2_assert("lambda body: is TENS",    T(r) == TENS);
-    r2_assert("lambda body: data[0]==5", tensor_heap[ord(r)].data[0] == 5.f);
-    r2_assert("lambda body: data[1]==6", tensor_heap[ord(r)].data[1] == 6.f);
+    r2_assert("lambda body: data[0]==5", ts->tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("lambda body: data[1]==6", ts->tensor_heap[ord(r)].data[1] == 6.f);
     return NULL;
 }
 
@@ -1319,8 +1319,8 @@ static const char *test_print_returns_value(void)
 {
     setup();
     /* (print 42) should return 42 */
-    L expr = cons(atom("print"), cons((L)42.0, l_nil));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "print"), cons(ts, (L)42.0, ts->l_nil));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("print: returns numeric value", r == (L)42.0);
     return NULL;
 }
@@ -1329,14 +1329,14 @@ static const char *test_print_returns_tensor(void)
 {
     setup();
     /* (define v [1 2 3]) (print v) should return the tensor */
-    L mk   = cons(atom("make-tensor"),
-                  cons((L)1.0, cons((L)2.0, cons((L)3.0, l_nil))));
-    L def  = cons(atom("define"), cons(atom("v"), cons(mk, l_nil)));
-    eval(def, l_env);
-    L expr = cons(atom("print"), cons(atom("v"), l_nil));
-    L r = eval(expr, l_env);
+    L mk   = cons(ts, atom(ts, "make-tensor"),
+                  cons(ts, (L)1.0, cons(ts, (L)2.0, cons(ts, (L)3.0, ts->l_nil))));
+    L def  = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "v"), cons(ts, mk, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L expr = cons(ts, atom(ts, "print"), cons(ts, atom(ts, "v"), ts->l_nil));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("print tensor: is TENS",    T(r) == TENS);
-    r2_assert("print tensor: data[0]==1", tensor_heap[ord(r)].data[0] == 1.f);
+    r2_assert("print tensor: data[0]==1", ts->tensor_heap[ord(r)].data[0] == 1.f);
     return NULL;
 }
 
@@ -1348,12 +1348,12 @@ static const char *test_set_bang_scalar(void)
 {
     setup();
     /* (define x 1) (setq x 42) => x is now 42 */
-    L def = cons(atom("define"), cons(atom("x"), cons((L)1.0, l_nil)));
-    eval(def, l_env);
-    L set = cons(atom("setq"), cons(atom("x"), cons((L)42.0, l_nil)));
-    L ret = eval(set, l_env);
+    L def = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "x"), cons(ts, (L)1.0, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L set = cons(ts, atom(ts, "setq"), cons(ts, atom(ts, "x"), cons(ts, (L)42.0, ts->l_nil)));
+    L ret = eval(ts, set, ts->l_env);
     r2_assert("setq returns new value",        equ(ret, (L)42.0));
-    r2_assert("setq mutates binding",          equ(eval(atom("x"), l_env), (L)42.0));
+    r2_assert("setq mutates binding",          equ(eval(ts, atom(ts, "x"), ts->l_env), (L)42.0));
     return NULL;
 }
 
@@ -1365,14 +1365,14 @@ static const char *test_set_bang_tensor(void)
     float d2[] = {7.f, 8.f, 9.f};
     L v1 = make_vec(3, d1);
     L v2 = make_vec(3, d2);
-    L def = cons(atom("define"), cons(atom("W"), cons(v1, l_nil)));
-    eval(def, l_env);
-    L set = cons(atom("setq"), cons(atom("W"), cons(v2, l_nil)));
-    eval(set, l_env);
-    L val = eval(atom("W"), l_env);
+    L def = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "W"), cons(ts, v1, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L set = cons(ts, atom(ts, "setq"), cons(ts, atom(ts, "W"), cons(ts, v2, ts->l_nil)));
+    eval(ts, set, ts->l_env);
+    L val = eval(ts, atom(ts, "W"), ts->l_env);
     r2_assert("setq tensor: is TENS",     T(val) == TENS);
-    r2_assert("setq tensor: data[0]==7",  tensor_heap[ord(val)].data[0] == 7.f);
-    r2_assert("setq tensor: data[2]==9",  tensor_heap[ord(val)].data[2] == 9.f);
+    r2_assert("setq tensor: data[0]==7",  ts->tensor_heap[ord(val)].data[0] == 7.f);
+    r2_assert("setq tensor: data[2]==9",  ts->tensor_heap[ord(val)].data[2] == 9.f);
     return NULL;
 }
 
@@ -1380,8 +1380,8 @@ static const char *test_set_bang_unbound_is_l_err(void)
 {
     setup();
     /* (setq undefined-var 1) => L_ERR (not defined) */
-    L set = cons(atom("setq"), cons(atom("no-such-var"), cons((L)1.0, l_nil)));
-    r2_assert("setq unbound returns L_ERR", equ(eval(set, l_env), l_err));
+    L set = cons(ts, atom(ts, "setq"), cons(ts, atom(ts, "no-such-var"), cons(ts, (L)1.0, ts->l_nil)));
+    r2_assert("setq unbound returns L_ERR", equ(eval(ts, set, ts->l_env), ts->l_err));
     return NULL;
 }
 
@@ -1389,15 +1389,15 @@ static const char *test_set_bang_no_shadow(void)
 {
     setup();
     /* define once, setq twice — env must not grow with shadow bindings */
-    L def = cons(atom("define"), cons(atom("n"), cons((L)0.0, l_nil)));
-    eval(def, l_env);
-    L env_after_define = l_env;
-    L set1 = cons(atom("setq"), cons(atom("n"), cons((L)1.0, l_nil)));
-    eval(set1, l_env);
-    L set2 = cons(atom("setq"), cons(atom("n"), cons((L)2.0, l_nil)));
-    eval(set2, l_env);
-    r2_assert("setq does not grow env",  equ(l_env, env_after_define));
-    r2_assert("n is 2 after two setqs",  equ(eval(atom("n"), l_env), (L)2.0));
+    L def = cons(ts, atom(ts, "define"), cons(ts, atom(ts, "n"), cons(ts, (L)0.0, ts->l_nil)));
+    eval(ts, def, ts->l_env);
+    L env_after_define = ts->l_env;
+    L set1 = cons(ts, atom(ts, "setq"), cons(ts, atom(ts, "n"), cons(ts, (L)1.0, ts->l_nil)));
+    eval(ts, set1, ts->l_env);
+    L set2 = cons(ts, atom(ts, "setq"), cons(ts, atom(ts, "n"), cons(ts, (L)2.0, ts->l_nil)));
+    eval(ts, set2, ts->l_env);
+    r2_assert("setq does not grow env",  equ(ts->l_env, env_after_define));
+    r2_assert("n is 2 after two setqs",  equ(eval(ts, atom(ts, "n"), ts->l_env), (L)2.0));
     return NULL;
 }
 
@@ -1409,8 +1409,8 @@ static const char *test_rank_scalar_number(void)
 {
     setup();
     /* (rank 4) => 0  (a plain number is a rank-0 scalar) */
-    L expr = cons(atom("rank"), cons((L)4.0, l_nil));
-    r2_assert("rank of plain number is 0", equ(eval(expr, l_env), (L)0.0));
+    L expr = cons(ts, atom(ts, "rank"), cons(ts, (L)4.0, ts->l_nil));
+    r2_assert("rank of plain number is 0", equ(eval(ts, expr, ts->l_env), (L)0.0));
     return NULL;
 }
 
@@ -1418,15 +1418,15 @@ static const char *test_rank1_single_tensor(void)
 {
     setup();
     /* (make-tensor 5) => rank-1 vector with one element, shape [1] */
-    L expr = cons(atom("make-tensor"), cons((L)5.0, l_nil));
-    L r = eval(expr, l_env);
+    L expr = cons(ts, atom(ts, "make-tensor"), cons(ts, (L)5.0, ts->l_nil));
+    L r = eval(ts, expr, ts->l_env);
     r2_assert("single-elem tensor is TENS",       T(r) == TENS);
-    r2_assert("single-elem tensor rank == 1",     tensor_heap[ord(r)].rank == 1);
-    r2_assert("single-elem tensor shape[0] == 1", tensor_heap[ord(r)].shape[0] == 1);
-    r2_assert("single-elem tensor data[0]==5",    tensor_heap[ord(r)].data[0] == 5.f);
+    r2_assert("single-elem tensor rank == 1",     ts->tensor_heap[ord(r)].rank == 1);
+    r2_assert("single-elem tensor shape[0] == 1", ts->tensor_heap[ord(r)].shape[0] == 1);
+    r2_assert("single-elem tensor data[0]==5",    ts->tensor_heap[ord(r)].data[0] == 5.f);
     /* (rank (make-tensor 5)) => 1 */
-    L rank_expr = cons(atom("rank"), cons(expr, l_nil));
-    r2_assert("(rank [5]) == 1", equ(eval(rank_expr, l_env), (L)1.0));
+    L rank_expr = cons(ts, atom(ts, "rank"), cons(ts, expr, ts->l_nil));
+    r2_assert("(rank [5]) == 1", equ(eval(ts, rank_expr, ts->l_env), (L)1.0));
     return NULL;
 }
 
@@ -1444,12 +1444,12 @@ static L parse_eval(const char *src)
     char buf_copy[256];
     snprintf(buf_copy, sizeof(buf_copy), "%s", src);
     FILE *f = fmemopen(buf_copy, strlen(buf_copy), "r");
-    input_stream = f;
-    see = ' ';
-    L expr = Read();
+    ts->input_stream = f;
+    ts->see = ' ';
+    L expr = Read(ts);
     fclose(f);
-    input_stream = NULL;
-    return eval(expr, l_env);
+    ts->input_stream = NULL;
+    return eval(ts, expr, ts->l_env);
 }
 
 static const char *test_scan_hash_t(void)
@@ -1457,7 +1457,7 @@ static const char *test_scan_hash_t(void)
     setup();
     /* #t must be tokenized as a single atom, not split into '#' and 't' */
     L result = parse_eval("#t");
-    r2_assert("scan #t is atom tru", equ(result, l_tru));
+    r2_assert("scan #t is atom tru", equ(result, ts->l_tru));
     return NULL;
 }
 
@@ -1476,6 +1476,130 @@ static const char *test_scan_shebang(void)
     /* #! at the start of a line must be skipped as a shebang comment */
     L result = parse_eval("#!/usr/bin/env basis\n99");
     r2_assert("shebang skipped, reads 99", equ(result, (L)99.0));
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
+   Multi-instance isolation (lisp_state_t)
+   --------------------------------------------------------------------- */
+
+/* Helper: create a fully initialised interpreter instance. */
+static lisp_state_t *make_instance(void)
+{
+    II i;
+    lisp_state_t *s = lisp_state_new();
+    s->l_nil = box(NIL, 0);
+    s->l_err = atom(s, "L_ERR");
+    s->l_tru = atom(s, "#t");
+    s->l_env = pair(s, s->l_tru, s->l_tru, s->l_nil);
+    register_tensor_prims(s);
+    register_runtime_prims(s);
+    for (i = 0; s->prim[i].s; i++)
+        s->l_env = pair(s, atom(s, s->prim[i].s), box(PRIM, i), s->l_env);
+    return s;
+}
+
+/* Helper: eval a string expression in an arbitrary instance (not ts). */
+static L instance_eval(lisp_state_t *s, const char *src)
+{
+    char buf_copy[256];
+    snprintf(buf_copy, sizeof(buf_copy), "%s", src);
+    FILE *f = fmemopen(buf_copy, strlen(buf_copy), "r");
+    s->input_stream = f;
+    s->see = ' ';
+    L expr = Read(s);
+    fclose(f);
+    s->input_stream = NULL;
+    return eval(s, expr, s->l_env);
+}
+
+static const char *test_multiinstance_new_initial_state(void)
+{
+    lisp_state_t *s = lisp_state_new();
+    r2_assert("hp starts at 0",  s->hp == 0);
+    r2_assert("sp starts at N",  s->sp == N);
+    r2_assert("th starts at 0",  s->th == 0);
+    r2_assert("see starts at space", s->see == ' ');
+    lisp_state_free(s);
+    return NULL;
+}
+
+static const char *test_multiinstance_env_isolation(void)
+{
+    /* define x=1 in instance A; instance B must not see x */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    /* define x = 1 in a */
+    a->l_env = pair(a, atom(a, "x"), (L)1.0, a->l_env);
+    L x_in_a = eval(a, atom(a, "x"), a->l_env);
+    r2_assert("x is 1 in instance a", equ(x_in_a, (L)1.0));
+
+    /* x should not exist in b — eval returns l_err */
+    L x_in_b = eval(b, atom(b, "x"), b->l_env);
+    r2_assert("x is l_err in instance b", equ(x_in_b, b->l_err));
+
+    lisp_state_free(a);
+    lisp_state_free(b);
+    return NULL;
+}
+
+static const char *test_multiinstance_define_no_cross_pollution(void)
+{
+    /* (define answer 42) in A must not affect B, and B can define its own */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    instance_eval(a, "(define answer 42)");
+    instance_eval(b, "(define answer 99)");
+
+    L va = instance_eval(a, "answer");
+    L vb = instance_eval(b, "answer");
+
+    r2_assert("answer is 42 in a", equ(va, (L)42.0));
+    r2_assert("answer is 99 in b", equ(vb, (L)99.0));
+    r2_assert("a and b disagree",  !equ(va, vb));
+
+    lisp_state_free(a);
+    lisp_state_free(b);
+    return NULL;
+}
+
+static const char *test_multiinstance_tensor_isolation(void)
+{
+    /* Tensors allocated in A must not be visible in B's tensor_heap */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    instance_eval(a, "(define v [1 2 3])");
+    II th_a = a->th;
+    II th_b = b->th;
+
+    r2_assert("tensor allocated in a", th_a > 0);
+    r2_assert("b tensor heap unaffected", th_b == 0);
+
+    lisp_state_free(a);
+    lisp_state_free(b);
+    return NULL;
+}
+
+static const char *test_multiinstance_gc_isolation(void)
+{
+    /* gc on instance A must not touch instance B's tensor heap */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    instance_eval(a, "(define v [1 2 3])");
+    instance_eval(b, "(define w [4 5 6])");
+
+    II th_b_before = b->th;
+    gc(a);   /* GC only instance a */
+    II th_b_after = b->th;
+
+    r2_assert("b tensor heap unchanged after gc(a)", th_b_before == th_b_after);
+
+    lisp_state_free(a);
+    lisp_state_free(b);
     return NULL;
 }
 
@@ -1572,6 +1696,11 @@ static const char *all_tests(void)
     r2_run_test(test_scan_hash_t);
     r2_run_test(test_scan_cond_hash_t);
     r2_run_test(test_scan_shebang);
+    r2_run_test(test_multiinstance_new_initial_state);
+    r2_run_test(test_multiinstance_env_isolation);
+    r2_run_test(test_multiinstance_define_no_cross_pollution);
+    r2_run_test(test_multiinstance_tensor_isolation);
+    r2_run_test(test_multiinstance_gc_isolation);
     return NULL;
 }
 

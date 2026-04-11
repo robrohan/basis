@@ -36,6 +36,7 @@ legend:
 ## ✅ Done
 
 **Complete**
+- [x] Refactor all interpreter globals into lisp_state_t context struct: interpreter is now multi-instance capable (Step 1 of proxy server design)
 - [x] Fix multi-head attention in gpt2_generate.lisp: split Q/K/V into 12 heads of 64 dims, run attention per-head with causal mask, vstack results; add causal-mask C primitive
 - [x] Fix generate loop: use global context tensor + set! so gc() can safely free forward-pass intermediates without corrupting the token history; replace (eq? n 0) with (< 0 n)
 - [x] Add (match pattern data) primitive in tinysymbolic.c: ?-prefixed atoms are variables, returns bindings alist (? stripped from keys) or ERR; consistent variable binding checked; handles atoms, lists, numbers, nil
