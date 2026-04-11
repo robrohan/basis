@@ -1,7 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <editline/readline.h>   /* macOS system editline; Linux: install libedit-dev */
+#ifdef HAVE_EDITLINE
+#include <editline/readline.h>
+#else
+/* fgets fallback for platforms without libedit — no history or line editing */
+static char *readline(const char *prompt)
+{
+    char buf[4096];
+    printf("%s", prompt);
+    fflush(stdout);
+    if (!fgets(buf, sizeof(buf), stdin)) return NULL;
+    buf[strcspn(buf, "\n")] = '\0';
+    return strdup(buf);
+}
+static void add_history(const char *line) { (void)line; }
+#endif
 
 #include "r2_termui.h"
 #include "tinylisp.h"

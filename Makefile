@@ -25,6 +25,8 @@ ifeq ($(PLATFORM), Darwin)
 		BLAS_CFLAGS  = -DHAVE_BLAS -DACCELERATE_NEW_LAPACK -framework Accelerate
 		BLAS_LDFLAGS = -framework Accelerate
 	endif
+	EDITLINE_CFLAGS  = -DHAVE_EDITLINE
+	EDITLINE_LDFLAGS = -ledit
 else
 	BLAS_LIBS := $(shell pkg-config --libs openblas 2>/dev/null)
 	ifneq ($(BLAS_LIBS),)
@@ -88,13 +90,13 @@ build: $(GGUF_OBJS)
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/repl.c ./src/main.c \
-		$(BLAS_CFLAGS) \
+		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
 		$(BLAS_LDFLAGS) \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm -ledit
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm $(EDITLINE_LDFLAGS)
 
 test: $(GGUF_OBJS)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
@@ -129,7 +131,7 @@ release_cli: $(GGUF_OBJS)
 		-I./src \
 		$(GGUF_INC) \
 		$(BLAS_LDFLAGS) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm -ledit
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm $(EDITLINE_LDFLAGS)
 
 ifeq ($(PLATFORM), Darwin)
 	otool -L ./build/$(PLATFORM)/$(CPU)/$(APP)
