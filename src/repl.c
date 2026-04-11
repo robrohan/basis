@@ -52,7 +52,7 @@ void repl(lisp_state_t *s)
 
         /* accumulate continuation lines until brackets are balanced */
         while (expr_depth(accum) > 0) {
-            char *more = readline("  ... ");
+            char *more = readline("_ ");
             if (!more) break;   /* Ctrl+D mid-expression — abandon it */
             strncat(accum, more, sizeof(accum) - strlen(accum) - 2);
             strncat(accum, "\n", sizeof(accum) - strlen(accum) - 1);
