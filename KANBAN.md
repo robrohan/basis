@@ -20,7 +20,7 @@ legend:
 - [ ] 📢 Better error messages somehow 
 - [ ] 🪲 car and cdr don't seem to work with tensors - first and rest do, maybe just call those if someone passes a tensor to car or cdr?
 - [ ] 🪲 (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error (needs better error handling)
-- [ ] 📢 More compelling REPL using r2_termui.h, up arrow for last line, secondary cursor for continued lines, ? lists all possible functions.
+- [ ] 📢 REPL: type ? at the prompt to display a help screen — list all registered primitives with a one-line description each, show key bindings (Ctrl+D to quit, multi-line with _), and print the version; use r2_termui for formatting
 - [ ] 📢 KB tensor properties: storing tensors in KB facts requires a helper like (fact s p o) since quote prevents tensor literal evaluation — (fact 'car 'bbox [2.0 1.5 4.5]) works but is ugly; proper fix is a (triple s p o) builtin or quasiquote/unquote support
 - [ ] 📢 Add (unify p1 p2) for bidirectional pattern matching: finds substitutions that make two terms equal, both terms can contain variables; needed for theorem proving and constraint solving beyond one-directional match
 - [ ] 📢 Neurosymbolic demo: knowledge base with physical properties (mass, bounding box as tensors) alongside is-a/has-a facts; query KB for object properties, combine with tensor ops for similarity
@@ -37,6 +37,7 @@ legend:
 
 **Complete**
 - [x] Refactor all interpreter globals into lisp_state_t context struct: interpreter is now multi-instance capable (Step 1 of proxy server design)
+- [x] REPL: editline line editing (left/right cursor, backspace), up/down history, coloured stats prompt via r2_termui, multi-line continuation with _ prompt, broken out into src/repl.c
 - [x] Fix multi-head attention in gpt2_generate.lisp: split Q/K/V into 12 heads of 64 dims, run attention per-head with causal mask, vstack results; add causal-mask C primitive
 - [x] Fix generate loop: use global context tensor + set! so gc() can safely free forward-pass intermediates without corrupting the token history; replace (eq? n 0) with (< 0 n)
 - [x] Add (match pattern data) primitive in tinysymbolic.c: ?-prefixed atoms are variables, returns bindings alist (? stripped from keys) or ERR; consistent variable binding checked; handles atoms, lists, numbers, nil
