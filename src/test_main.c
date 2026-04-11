@@ -1480,6 +1480,130 @@ static const char *test_scan_shebang(void)
 }
 
 /* -----------------------------------------------------------------------
+   Multi-instance isolation (lisp_state_t)
+   --------------------------------------------------------------------- */
+
+/* Helper: create a fully initialised interpreter instance. */
+static lisp_state_t *make_instance(void)
+{
+    II i;
+    lisp_state_t *s = lisp_state_new();
+    s->l_nil = box(NIL, 0);
+    s->l_err = atom(s, "L_ERR");
+    s->l_tru = atom(s, "#t");
+    s->l_env = pair(s, s->l_tru, s->l_tru, s->l_nil);
+    register_tensor_prims(s);
+    register_runtime_prims(s);
+    for (i = 0; s->prim[i].s; i++)
+        s->l_env = pair(s, atom(s, s->prim[i].s), box(PRIM, i), s->l_env);
+    return s;
+}
+
+/* Helper: eval a string expression in an arbitrary instance (not ts). */
+static L instance_eval(lisp_state_t *s, const char *src)
+{
+    char buf_copy[256];
+    snprintf(buf_copy, sizeof(buf_copy), "%s", src);
+    FILE *f = fmemopen(buf_copy, strlen(buf_copy), "r");
+    s->input_stream = f;
+    s->see = ' ';
+    L expr = Read(s);
+    fclose(f);
+    s->input_stream = NULL;
+    return eval(s, expr, s->l_env);
+}
+
+static const char *test_multiinstance_new_initial_state(void)
+{
+    lisp_state_t *s = lisp_state_new();
+    r2_assert("hp starts at 0",  s->hp == 0);
+    r2_assert("sp starts at N",  s->sp == N);
+    r2_assert("th starts at 0",  s->th == 0);
+    r2_assert("see starts at space", s->see == ' ');
+    lisp_state_free(s);
+    return NULL;
+}
+
+static const char *test_multiinstance_env_isolation(void)
+{
+    /* define x=1 in instance A; instance B must not see x */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    /* define x = 1 in a */
+    a->l_env = pair(a, atom(a, "x"), (L)1.0, a->l_env);
+    L x_in_a = eval(a, atom(a, "x"), a->l_env);
+    r2_assert("x is 1 in instance a", equ(x_in_a, (L)1.0));
+
+    /* x should not exist in b — eval returns l_err */
+    L x_in_b = eval(b, atom(b, "x"), b->l_env);
+    r2_assert("x is l_err in instance b", equ(x_in_b, b->l_err));
+
+    lisp_state_free(a);
+    lisp_state_free(b);
+    return NULL;
+}
+
+static const char *test_multiinstance_define_no_cross_pollution(void)
+{
+    /* (define answer 42) in A must not affect B, and B can define its own */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    instance_eval(a, "(define answer 42)");
+    instance_eval(b, "(define answer 99)");
+
+    L va = instance_eval(a, "answer");
+    L vb = instance_eval(b, "answer");
+
+    r2_assert("answer is 42 in a", equ(va, (L)42.0));
+    r2_assert("answer is 99 in b", equ(vb, (L)99.0));
+    r2_assert("a and b disagree",  !equ(va, vb));
+
+    lisp_state_free(a);
+    lisp_state_free(b);
+    return NULL;
+}
+
+static const char *test_multiinstance_tensor_isolation(void)
+{
+    /* Tensors allocated in A must not be visible in B's tensor_heap */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    instance_eval(a, "(define v [1 2 3])");
+    II th_a = a->th;
+    II th_b = b->th;
+
+    r2_assert("tensor allocated in a", th_a > 0);
+    r2_assert("b tensor heap unaffected", th_b == 0);
+
+    lisp_state_free(a);
+    lisp_state_free(b);
+    return NULL;
+}
+
+static const char *test_multiinstance_gc_isolation(void)
+{
+    /* gc on instance A must not touch instance B's tensor heap */
+    lisp_state_t *a = make_instance();
+    lisp_state_t *b = make_instance();
+
+    instance_eval(a, "(define v [1 2 3])");
+    instance_eval(b, "(define w [4 5 6])");
+
+    II th_b_before = b->th;
+    gc(a);   /* GC only instance a */
+    II th_b_after = b->th;
+
+    r2_assert("b tensor heap unchanged after gc(a)", th_b_before == th_b_after);
+
+    lisp_state_free(a);
+    lisp_state_free(b);
+    return NULL;
+}
+
+/* -----------------------------------------------------------------------
    Test runner
    --------------------------------------------------------------------- */
 
@@ -1572,6 +1696,11 @@ static const char *all_tests(void)
     r2_run_test(test_scan_hash_t);
     r2_run_test(test_scan_cond_hash_t);
     r2_run_test(test_scan_shebang);
+    r2_run_test(test_multiinstance_new_initial_state);
+    r2_run_test(test_multiinstance_env_isolation);
+    r2_run_test(test_multiinstance_define_no_cross_pollution);
+    r2_run_test(test_multiinstance_tensor_isolation);
+    r2_run_test(test_multiinstance_gc_isolation);
     return NULL;
 }
 
