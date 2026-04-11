@@ -1,6 +1,8 @@
 #ifndef GGUF_LOADER_H
 #define GGUF_LOADER_H
 
+#include "tinylisp.h"
+
 /* (load-gguf "model.gguf") — open a GGUF file, dequantize every tensor to
    float32, allocate each in the basis tensor heap, and bind it by name in
    the global env.  Returns the number of tensors loaded, or ERR on failure.
@@ -12,6 +14,6 @@
    Note: GGUF stores dimensions innermost-first (column-major for 2-D tensors).
    Use (T x) to transpose if your matmul expects row-major weight matrices. */
 
-void register_gguf_prims(void);
+void register_gguf_prims(lisp_state_t *s);
 
 #endif /* GGUF_LOADER_H */

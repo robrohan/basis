@@ -10,19 +10,19 @@
 /* (load-gguf "model.gguf")
    Opens the GGUF file, skips metadata, iterates every tensor, dequantizes
    each to float32, allocates it in the basis tensor heap, and binds the
-   tensor name as an atom in the global l_env.
+   tensor name as an atom in the global s->l_env.
    Returns the count of loaded tensors, or L_ERR if the file cannot be opened. */
-static L f_load_gguf(L t, L e)
+static L f_load_gguf(lisp_state_t *s, L t, L e)
 {
-    L arg = car(evlis(t, e));
-    if (T(arg) != STR && T(arg) != ATOM) return l_err;
+    L arg = car(s, evlis(s, t, e));
+    if (T(arg) != STR && T(arg) != ATOM) return s->l_err;
 
-    const char *path = A + ord(arg);
+    const char *path = A(s) + ord(arg);
 
     gguf_ctx *ctx = gguf_open(path);
     if (!ctx) {
         fprintf(stderr, "load-gguf: cannot open '%s'\n", path);
-        return l_err;
+        return s->l_err;
     }
 
     /* skip all metadata key-value pairs — we only want tensor weights */
@@ -62,7 +62,7 @@ static L f_load_gguf(L t, L e)
         }
 
         /* allocate tensor in basis heap, then free the temporary float array */
-        tensor_t *bt = alloc_tensor(rank, shape, len, data);
+        tensor_t *bt = alloc_tensor(s, rank, shape, len, data);
         free(data);
 
         /* null-terminate the GGUF name (not null-terminated in the file) */
@@ -71,8 +71,8 @@ static L f_load_gguf(L t, L e)
         memcpy(name, tensor.name, nl);
         name[nl] = '\0';
 
-        /* bind name → tensor in the global l_environment */
-        l_env = pair(atom(name), box(TENS, (II)(bt - tensor_heap)), l_env);
+        /* bind name → tensor in the global s->l_environment */
+        s->l_env = pair(s, atom(s, name), box(TENS, (II)(bt - s->tensor_heap)), s->l_env);
 
         fprintf(stderr, "  %s  [", name);
         for (i = 0; i < rank; i++) {
@@ -89,7 +89,7 @@ static L f_load_gguf(L t, L e)
     return (L)(double)loaded;
 }
 
-void register_gguf_prims(void)
+void register_gguf_prims(lisp_state_t *s)
 {
-    register_prim("load-gguf", f_load_gguf);
+    register_prim(s, "load-gguf", f_load_gguf);
 }
