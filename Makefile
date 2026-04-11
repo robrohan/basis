@@ -87,14 +87,14 @@ build: $(GGUF_OBJS)
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/repl.c ./src/main.c \
 		$(BLAS_CFLAGS) \
 		$(BLAS_LDFLAGS) \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm 
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm -ledit
 
 test: $(GGUF_OBJS)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
@@ -123,13 +123,13 @@ release_cli: $(GGUF_OBJS)
 		-DVERSION=\"$(HASH)\" \
 		$(BLAS_CFLAGS) \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
-		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/main.c \
+		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/repl.c ./src/main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
 		$(BLAS_LDFLAGS) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm -ledit
 
 ifeq ($(PLATFORM), Darwin)
 	otool -L ./build/$(PLATFORM)/$(CPU)/$(APP)
