@@ -4,6 +4,7 @@
 #include "runtime.h"
 #include "gguf_loader.h"
 #include "tokenizer.h"
+#include "repl.h"
 #include <stdio.h>
 #include <unistd.h>
 
@@ -46,21 +47,6 @@ static int run_file(lisp_state_t *s, const char *path)
     return 0;
 }
 
-/* interactive REPL — prints each result and runs GC after each expression.
-   UI chrome (prompt, banner) lives here so run_file stays headless.
-   future: replace with r2_termui for richer interactive experience. */
-static void repl(lisp_state_t *s)
-{
-    printf(":: Basis version %s\n", VERSION);
-    printf(":: Ctrl+d to quit\n");
-    while (1)
-    {
-        printf("\n(%06x)[%06x]> ", s->sp - s->hp / 8, s->th);
-        fflush(stdout);
-        print(s, eval(s, Read(s), s->l_env));
-        gc(s);
-    }
-}
 
 int main(int argc, char *argv[])
 {
