@@ -8,22 +8,6 @@
 #include "runtime.h"
 #include "repl.h"
 
-/* Build a colourised prompt showing heap and tensor-heap usage.
-   ESC_SET_ATTRIBUTE_MODE_1 is "\033[%dm" — a printf format string — so we
-   compose the prompt incrementally, one piece per snprintf call.
-   \001 / \002 are readline's prompt-ignore markers: they tell readline not to
-   count the enclosed bytes when measuring the prompt width, so line-wrapping
-   and cursor positioning stay correct. */
-static void make_prompt(lisp_state_t *s, char *out, size_t n)
-{
-    int len = 0;
-    len += snprintf(out + len, n - (size_t)len, "\001" ESC_SET_ATTRIBUTE_MODE_1 "\002", 32); /* green  */
-    len += snprintf(out + len, n - (size_t)len, "(%06x)", s->sp - s->hp / 8);
-    len += snprintf(out + len, n - (size_t)len, "\001" ESC_SET_ATTRIBUTE_MODE_1 "\002", 33); /* yellow */
-    len += snprintf(out + len, n - (size_t)len, "[%06x]", s->th);
-    len += snprintf(out + len, n - (size_t)len, "\001" ESC_SET_ATTRIBUTE_MODE_1 "\002", 0);  /* reset  */
-          snprintf(out + len, n - (size_t)len, "> ");
-}
 
 /* Count unmatched open brackets to determine if an expression is complete.
    Skips string literals and ; line comments so they don't skew the count.
@@ -43,15 +27,21 @@ static int expr_depth(const char *buf)
 
 void repl(lisp_state_t *s)
 {
-    char prompt[128];
     char accum[4096];
 
     printf(":: Basis version %s\n", VERSION);
     printf(":: Ctrl+d to quit\n");
 
     while (1) {
-        make_prompt(s, prompt, sizeof(prompt));
-        char *line = readline(prompt);
+        /* print coloured stats with printf — r2_termui macros are printf
+           format strings, not embeddable string literals */
+        printf(ESC_SET_ATTRIBUTE_MODE_1, 32);   /* green  */
+        printf("(%06x)", s->sp - s->hp / 8);
+        printf(ESC_SET_ATTRIBUTE_MODE_1, 33);   /* yellow */
+        printf("[%06x]", s->th);
+        printf(ESC_SET_ATTRIBUTE_MODE_1, 0);    /* reset  */
+        fflush(stdout);
+        char *line = readline("> ");
         if (!line) { printf("\n"); break; }   /* Ctrl+D — exit cleanly */
         if (*line == '\0') { free(line); continue; }  /* blank line — skip */
 
