@@ -27,6 +27,7 @@ legend:
 - [ ] 🔮 Proxy server with rules engine (see ./docs/idea_server.md)
 - [ ] 🔮 Very simple physics world model: mass ratio crush check, bounding sphere overlap, a handful of rules (crush/bounce/slide); designed to answer LLM-posed questions like "what happens if X hits Y"; depends on KB and match being solid first
 - [ ] 🔮 Batched training: parallelize train-epoch across CPU cores — each example is independent, spawn N threads each running train-one on a subset, accumulate gradients, single weight update step; revisit if project moves beyond research POC
+- [ ] 🔮 cuBLAS support: add HAVE_CUBLAS build path in tinytensor.c alongside existing HAVE_BLAS (OpenBLAS) paths so GPU-accelerated mat_mul can be used on Linux machines with CUDA
 
 
 ## 📝 Todo

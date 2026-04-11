@@ -34,6 +34,16 @@ make release_cli   # build the release runtime
 make test          # run unit tests
 ```
 
+### Linux — BLAS acceleration
+
+On Linux the build auto-detects OpenBLAS via `pkg-config`. Install it first or
+the build will silently fall back to the unaccelerated path:
+
+```sh
+sudo apt-get install libopenblas-dev   # Ubuntu / Debian
+make build
+```
+
 Run a file:
 
 ```sh
