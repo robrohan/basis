@@ -154,10 +154,39 @@ static L f_load(lisp_state_t *s, L t, L e)
     return s->l_nil;
 }
 
+/* (substring text start len) — extract len bytes starting at byte offset start.
+   Both start and len are byte offsets (compatible with re-match return values).
+   Returns a new string, or ERR if bounds are invalid. */
+static L f_substring(lisp_state_t *s, L t, L e)
+{
+    t = evlis(s, t, e);
+    L lstr   = car(s, t);          t = cdr(s, t);
+    L lstart = car(s, t);          t = cdr(s, t);
+    L llen   = car(s, t);
+
+    if (T(lstr) != STR && T(lstr) != ATOM) return s->l_err;
+
+    const char *str  = A(s) + ord(lstr);
+    int          slen  = (int)strlen(str);
+    int          start = (int)lstart;
+    int          len   = (int)llen;
+
+    if (start < 0 || len < 0 || start + len > slen) return s->l_err;
+
+    char tmp[2048];
+    if (len >= (int)sizeof(tmp)) return s->l_err;
+    memcpy(tmp, str + start, (size_t)len);
+    tmp[len] = '\0';
+
+    /* intern into atom heap, rebox as STR so print shows it with quotes */
+    return box(STR, ord(atom(s, tmp)));
+}
+
 void register_runtime_prims(lisp_state_t *s)
 {
-    register_prim(s, "equal", f_eq);
-    register_prim(s, "print", f_print);
-    register_prim(s, "gc",    f_gc);
-    register_prim(s, "load",  f_load);
+    register_prim(s, "equal",     f_eq);
+    register_prim(s, "print",     f_print);
+    register_prim(s, "gc",        f_gc);
+    register_prim(s, "load",      f_load);
+    register_prim(s, "substring", f_substring);
 }

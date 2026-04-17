@@ -18,6 +18,9 @@ STD:=c11
 GGUF_INC  := -I./vendor/gguf
 GGUF_OBJS  = ./build/$(PLATFORM)/$(CPU)/gguflib.o ./build/$(PLATFORM)/$(CPU)/fp16.o
 
+# tiny-regex-c (public domain) — UTF-8 patched, compiled without strict warnings
+RE_OBJ = ./build/$(PLATFORM)/$(CPU)/re.o
+
 ifeq ($(PLATFORM), Darwin)
 #	the CI/CD doesn't have BLAS so we need to disable it
 #	but only for mac CI/CD. Fall back to standard will work
@@ -48,7 +51,12 @@ endif
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 	$(CC) -O2 -std=$(STD) \
 	-c ./vendor/gguf/fp16.c \
-	-o $@ 
+	-o $@
+
+$(RE_OBJ): ./vendor/re.c ./vendor/re.h
+	mkdir -p ./build/$(PLATFORM)/$(CPU)/
+	$(CC) -O2 -std=$(STD) -D_POSIX_C_SOURCE=200809L -I./vendor \
+	-c ./vendor/re.c -o $@
 
 HASH = $(shell git log --pretty=format:'%h' -n 1)
 
@@ -83,41 +91,41 @@ fetch:
 	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/LICENSE   > ./vendor/gguf/LICENSE
 
 
-build: $(GGUF_OBJS)
+build: $(GGUF_OBJS) $(RE_OBJ)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/repl.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/tinyregex.c ./src/repl.c ./src/main.c \
 		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
 		$(BLAS_LDFLAGS) \
-		$(GGUF_OBJS) \
+		$(GGUF_OBJS) $(RE_OBJ) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
 		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm $(EDITLINE_LDFLAGS)
 
-test: $(GGUF_OBJS)
+test: $(GGUF_OBJS) $(RE_OBJ)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
-		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c \
+		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/tinyregex.c \
 		./src/test_main.c \
 		$(BLAS_CFLAGS) \
 		$(BLAS_LDFLAGS) \
-		$(GGUF_OBJS) \
+		$(GGUF_OBJS) $(RE_OBJ) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm 
+		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm
 
 	./build/$(PLATFORM)/$(CPU)/$(APP).test
 
-release_cli: $(GGUF_OBJS)
+release_cli: $(GGUF_OBJS) $(RE_OBJ)
 	mkdir -p ./build/$(PLATFORM)/$(CPU)/
 
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
@@ -125,8 +133,8 @@ release_cli: $(GGUF_OBJS)
 		-DVERSION=\"$(HASH)\" \
 		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
-		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/repl.c ./src/main.c \
-		$(GGUF_OBJS) \
+		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/tinyregex.c ./src/repl.c ./src/main.c \
+		$(GGUF_OBJS) $(RE_OBJ) \
 		-I./vendor \
 		-I./src \
 		$(GGUF_INC) \

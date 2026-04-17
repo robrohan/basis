@@ -18,7 +18,6 @@ legend:
 - [ ] 🪲 Scanner string literal hard limit of 253 bytes silently truncates longer strings — scan buf[] is fixed at 254 chars; increase to at least 2048 or replace with dynamic allocation; affects proxy/CGI use cases where URLs and JSON bodies easily exceed 253 bytes
 - [ ] 📢 Add (read-line) primitive: reads one line from stdin (or current input-stream) as a string, returns () on EOF — lower-level companion to (read); useful when the host sends newline-delimited text rather than S-expressions
 - [ ] 📢 Add string primitives: (string-length s) using s8.len for rune count, (string-ref s i) for rune at index, (string-append s1 s2) — use S()/free_S() around operations that need rune-aware counting, raw bytes for storage
-- [ ] 📢 add https://github.com/kokke/tiny-regex-c regex support (see test_logs.lisp for example implementation); library is ASCII-only and needs a UTF-8 patch before vendoring — patch strategy documented in `docs/regex_utf8.md`: ~60-80 line change to `re.c` using `utf8_len`/`to_rune` from the already-vendored `r2_strings.h`; `\w`/`\d`/`\s` stay ASCII-only intentionally
 - [ ] 📢 add https://github.com/json-parser/json-parser json reading support; interface design in `docs/json_interface.md` — `(json-parse str)` → alist with atom keys, `(json-stringify val)` → STR; alists become objects, lists become arrays, tensors become nested arrays; numeric arrays stay as lists by default (caller promotes to tensor explicitly)
 - [ ] 🔮 Integrate seaweb (robrohan's C HTTP server) as a vendor library and expose HTTP primitives — `(http-listen port handler)` or similar — so simple services can be written in Basis Lisp; depends on string primitives and (read-line)/(read) being solid first
 - [ ] 🔮 Discussion: standard library layout — currently `mod_kb.lisp`, `mod_math.lisp` etc. are loose files in `test_data/` that must be explicitly loaded; as primitives like `assoc`, `map`, `filter`, `append` are re-implemented in Lisp across multiple modules, decide: (a) expose more as C primitives, (b) define a `std/` directory always loaded at startup, or (c) keep explicit `load` calls but move stdlib out of `test_data/`; triggered by JSON interface needing `assoc` from `mod_kb.lisp`
@@ -46,6 +45,8 @@ legend:
 ## ✅ Done
 
 **Complete**
+- [x] Add regex support via UTF-8-patched tiny-regex-c: `(re-match pattern text)` returns `(start len)` byte offsets or `()`; `\w`/`\d`/`\s` ASCII-only, `.` and `[α-ω]` ranges are codepoint-aware; vendored as `vendor/re.c`
+- [x] Add `(substring text start len)` primitive: extracts a byte slice from a string; composes with `re-match` to extract matched text
 - [x] REPL slash commands: `/quit` exits cleanly, `/?` shows help screen with key bindings and all registered commands; extensible via `register_cmd()` in new `src/cmd.c`
 - [x] Refactor `main.c` execution pipeline: explicit phase sequence init→load→REPL→done; add `-r` flag to force REPL after file load; add `run_string()` via `fmemopen` as shared in-memory eval primitive for future bundle support
 - [x] Refactor all interpreter globals into lisp_state_t context struct: interpreter is now multi-instance capable (Step 1 of proxy server design)

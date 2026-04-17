@@ -6,6 +6,7 @@
 #include "tokenizer.h"
 #include "repl.h"
 #include "cmd.h"
+#include "tinyregex.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,6 +25,7 @@ static void init(lisp_state_t *s)
     register_gguf_prims(s);
     register_tokenizer_prims(s);
     register_repl_cmds(s);
+    register_regex_prims(s);
     for (i = 0; s->prim[i].s; ++i)
         s->l_env = pair(s, atom(s, s->prim[i].s), box(PRIM, i), s->l_env);
 }

@@ -239,9 +239,16 @@ Strings are written with double quotes. They are self-evaluating and stored as r
 (print "hello world")  ; prints: hello world
 ```
 
-Strings can be passed to primitives that accept path arguments (`load`, `load-gguf`, `load-gguf-vocab`) or printed directly. The `print` primitive outputs raw bytes without surrounding quotes; displayed strings should render correctly on UTF-8 terminals.
+Strings can be passed to primitives that accept path arguments (`load`, `load-gguf`, `load-gguf-vocab`) or to string operations. The `print` primitive outputs raw bytes without surrounding quotes; displayed strings should render correctly on UTF-8 terminals.
 
-Rune-aware (UTF-8 aware) string operations (`string-length`, `string-ref`, `string-append`) are planned but not yet implemented.
+`substring` extracts a slice by byte offset: `(substring text start len)`. Offsets align with `re-match` return values so the two compose directly:
+
+```lisp
+(define m (re-match "\d+" "abc123def"))
+(substring "abc123def" (car m) (car (cdr m)))   ; => "123"
+```
+
+Rune-aware (UTF-8 aware) operations (`string-length`, `string-ref`, `string-append`) are planned but not yet implemented.
 
 #### Expression Syntax
 
@@ -331,6 +338,14 @@ Element-wise and reduction operations over tensors:
 ```
 
 See [docs/primitives.md](primitives.md) for the full reference.
+
+#### String Operations
+
+`substring` extracts a slice of a string by byte offset. It is the low-level primitive for string slicing; higher-level rune-aware operations (`string-length`, `string-ref`, `string-append`) are planned.
+
+#### Regular Expressions
+
+`re-match` finds the first match of a pattern in a string and returns `(start len)` byte offsets, or `()` on no match. Patterns follow the tiny-regex-c syntax (`.` `^` `$` `*` `+` `?` `[a-z]` `\d` `\w` `\s`). `\w`/`\d`/`\s` are ASCII-only; `.` and character classes are codepoint-aware. Combine with `substring` to extract the matched text.
 
 #### Symbolic
 

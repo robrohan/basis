@@ -111,6 +111,24 @@ All four operators work on scalars, tensors, and mixed scalar/tensor (broadcast)
 |-----------|--------------------------------------|-----------------------------------------------------------------------------------------------|
 | `match`   | `(match '(?x is ?y) '(sky is blue))` | Unify pattern against data; `?`-prefixed atoms are variables; returns bindings alist or `ERR` |
 
+## String Operations
+
+| Primitive     | Example                          | Result    | Description                                                                                     |
+|---------------|----------------------------------|-----------|-------------------------------------------------------------------------------------------------|
+| `substring`   | `(substring "hello world" 6 5)`  | `"world"` | Extract `len` bytes starting at byte offset `start`; returns `ERR` if bounds are invalid. Offsets are **byte** positions, compatible with `re-match` return values. |
+
+## Regular Expressions
+
+Patterns are matched using a UTF-8-patched build of [tiny-regex-c](https://github.com/kokke/tiny-regex-c). Lisp string literals are raw bytes, so one `\` in source = one `\` in the pattern (no double-escaping needed). `\w`, `\d`, `\s` metaclasses are ASCII-only intentionally; `.` and character classes like `[α-ω]` are codepoint-aware.
+
+Supported syntax: `.` `^` `$` `*` `+` `?` `[abc]` `[^abc]` `[a-z]` `\s` `\S` `\w` `\W` `\d` `\D`
+
+| Primitive    | Example                            | Result   | Description                                                                                                    |
+|--------------|------------------------------------|----------|----------------------------------------------------------------------------------------------------------------|
+| `re-match`   | `(re-match "\d+" "abc123")`        | `(3 3)`  | Find first match; returns `(start len)` byte offsets or `()` on no match. Compose with `substring` to extract the matched text. |
+
+**Pattern note:** in Lisp source, write `"\d+"` (one backslash) — the scanner stores raw bytes, so `\\d` would be a literal-backslash pattern, not a digit class.
+
 ## I/O and Files
 
 | Primitive | Example              | Description                                       |
