@@ -123,7 +123,7 @@ release_cli: $(GGUF_OBJS)
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
-		$(BLAS_CFLAGS) \
+		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
 		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/repl.c ./src/main.c \
 		$(GGUF_OBJS) \
