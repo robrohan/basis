@@ -89,7 +89,7 @@ build: $(GGUF_OBJS)
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/repl.c ./src/main.c \
+		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/repl.c ./src/main.c \
 		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
 		$(BLAS_LDFLAGS) \
 		$(GGUF_OBJS) \
@@ -105,7 +105,7 @@ test: $(GGUF_OBJS)
 		-D_POSIX_C_SOURCE=200809L \
 		-DVERSION=\"$(HASH)\" \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
-		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c \
+		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c \
 		./src/test_main.c \
 		$(BLAS_CFLAGS) \
 		$(BLAS_LDFLAGS) \
@@ -125,7 +125,7 @@ release_cli: $(GGUF_OBJS)
 		-DVERSION=\"$(HASH)\" \
 		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
 		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
-		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/repl.c ./src/main.c \
+		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/repl.c ./src/main.c \
 		$(GGUF_OBJS) \
 		-I./vendor \
 		-I./src \

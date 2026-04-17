@@ -60,6 +60,19 @@ typedef struct lisp_state lisp_state_t;
    The function receives the interpreter state, argument list, and environment. */
 struct prims { const char *s; L (*f)(lisp_state_t *, L, L); };
 
+/* REPL slash-command table entry */
+#define CMD_MAX      16
+#define CMD_CONTINUE  0
+#define CMD_QUIT      1
+
+typedef int (*cmd_fn_t)(lisp_state_t *s, const char *args);
+
+struct repl_cmd {
+    const char *name;   /* e.g. "/quit" — include leading slash */
+    const char *help;   /* one-line description shown by /? */
+    cmd_fn_t    fn;
+};
+
 /* All interpreter state for one Lisp instance.
    Globals from the original tinylisp.c now live here so multiple instances
    can coexist without interfering with each other. */
@@ -86,6 +99,10 @@ struct lisp_state {
     /* Primitive table: populated once at init, then read-only */
     struct prims prim[MAX_PRIMS];
     int          prim_count;
+
+    /* REPL slash-command table */
+    struct repl_cmd cmds[CMD_MAX];
+    int             cmd_count;
 };
 
 /* address of the atom heap is at the bottom of the cell array */

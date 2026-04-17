@@ -20,6 +20,7 @@ static void add_history(const char *line) { (void)line; }
 #include "r2_termui.h"
 #include "tinylisp.h"
 #include "runtime.h"
+#include "cmd.h"
 #include "repl.h"
 
 
@@ -59,6 +60,11 @@ void repl(lisp_state_t *s)
         char *line = readline("> ");
         if (!line) { printf("\n"); break; }   /* Ctrl+D — exit cleanly */
         if (*line == '\0') { free(line); continue; }  /* blank line — skip */
+
+        /* slash commands: /quit, /?, etc. */
+        int cmd_result = dispatch_cmd(s, line);
+        if (cmd_result == CMD_QUIT) { free(line); break; }
+        if (cmd_result != -1)       { free(line); continue; }
 
         snprintf(accum, sizeof(accum), "%s\n", line);
         add_history(line);

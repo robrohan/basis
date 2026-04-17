@@ -10,7 +10,6 @@ legend:
 
 ## 🧊 Backlog
 
-- [ ] 📢 Refactor `main.c` execution pipeline: replace the current flat ternary (`file ? run_file : repl`) with an explicit phase sequence — (1) init, (2) load sources (bundle or -f file), (3) optional REPL if `-r`, (4) entry point / done; add `-r` flag to `getopt`; `run_string()` using `fmemopen` fits naturally as the load primitive shared by the bundle and any future in-memory eval; the REPL must come after all loading so the env is fully populated when the user drops in, but before any "run" phase so state can still be inspected or hot-patched
 - [ ] 📢 Build a small C tool (name and location TBD) that reads a `.lisp` file byte by byte and writes a C header containing a `static const unsigned char bundle_code[]` byte array plus its length — no string escaping, no external tools, just a `fgetc` loop emitting decimal values; add a Makefile target to compile the tool itself, and a `bundle` target that runs it then recompiles the interpreter with `-DHAVE_BUNDLE` to produce a self-contained binary named after the input file
 - [ ] 📢 Bundle runtime flags: the compiled binary always runs its embedded lisp first; add `-r` to drop into the REPL after (for live debugging / hot-patching), and keep `-f x.lisp` to load an additional file into the same env on top of the bundle (can redefine symbols, add helpers); flags compose — `./myapp -f patch.lisp -r` loads bundle → patch → REPL
 - [ ] 🔮 Proof engine (`test_data/mod_proof.lisp`): backward-chaining prover built on `unify`; rewrite rules stored as plain lists `(rule lhs rhs)`; `apply-subst`, `rewrite-once`, and `prove` implemented in Lisp; supports mathematical induction via base-case axioms + inductive-step rules; see `docs/proof_engine.md` for full design; depends on `unify` C primitive — implement that first (already in backlog)
@@ -30,7 +29,6 @@ legend:
 - [ ] 📢 Better error messages somehow 
 - [ ] 🪲 car and cdr don't seem to work with tensors - first and rest do, maybe just call those if someone passes a tensor to car or cdr?
 - [ ] 🪲 (pow (slice M 0)) returns [1 nan nan nan] - note missing second parameter. Should be error (needs better error handling)
-- [ ] 📢 REPL: type ? at the prompt to display a help screen — list all registered primitives with a one-line description each, show key bindings (Ctrl+D to quit, multi-line with _), and print the version; use r2_termui for formatting
 - [ ] 📢 KB tensor properties: storing tensors in KB facts requires a helper like (fact s p o) since quote prevents tensor literal evaluation — (fact 'car 'bbox [2.0 1.5 4.5]) works but is ugly; proper fix is a (triple s p o) builtin or quasiquote/unquote support
 - [ ] 📢 Add (unify p1 p2) for bidirectional pattern matching: finds substitutions that make two terms equal, both terms can contain variables; needed for theorem proving and constraint solving beyond one-directional match
 - [ ] 📢 Neurosymbolic demo: knowledge base with physical properties (mass, bounding box as tensors) alongside is-a/has-a facts; query KB for object properties, combine with tensor ops for similarity
@@ -48,6 +46,8 @@ legend:
 ## ✅ Done
 
 **Complete**
+- [x] REPL slash commands: `/quit` exits cleanly, `/?` shows help screen with key bindings and all registered commands; extensible via `register_cmd()` in new `src/cmd.c`
+- [x] Refactor `main.c` execution pipeline: explicit phase sequence init→load→REPL→done; add `-r` flag to force REPL after file load; add `run_string()` via `fmemopen` as shared in-memory eval primitive for future bundle support
 - [x] Refactor all interpreter globals into lisp_state_t context struct: interpreter is now multi-instance capable (Step 1 of proxy server design)
 - [x] REPL: editline line editing (left/right cursor, backspace), up/down history, coloured stats prompt via r2_termui, multi-line continuation with _ prompt, broken out into src/repl.c
 - [x] Fix multi-head attention in gpt2_generate.lisp: split Q/K/V into 12 heads of 64 dims, run attention per-head with causal mask, vstack results; add causal-mask C primitive
