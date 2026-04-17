@@ -1,25 +1,29 @@
-.PHONY: build
+.PHONY: build test release_cli clean fetch download_gpt2 help run
 
-CC=gcc
-APP=basis
+CC      = gcc
+APP     = basis
 
-PLATFORM:=$(shell uname -s)
-CPU:=$(shell uname -m)
+PLATFORM := $(shell uname -s)
+CPU      := $(shell uname -m)
+BUILD_DIR = ./build/$(PLATFORM)/$(CPU)
 
 C_ERRS += -Wall -Wextra -Wpedantic \
 		-Wformat=2 -Wno-unused-parameter -Wshadow \
 		-Wwrite-strings -Wstrict-prototypes -Wold-style-definition \
 		-Wredundant-decls -Wnested-externs -Wmissing-include-dirs \
 		-Wno-unused -Wno-unused-parameter
-STD:=c11
+STD := c11
 
 # Third-party GGUF reader (antirez/gguf-tools, BSD-2-Clause)
 # Compiled without our strict warning flags to avoid noise from vendor code.
 GGUF_INC  := -I./vendor/gguf
-GGUF_OBJS  = ./build/$(PLATFORM)/$(CPU)/gguflib.o ./build/$(PLATFORM)/$(CPU)/fp16.o
+GGUF_OBJS  = $(BUILD_DIR)/gguflib.o $(BUILD_DIR)/fp16.o
 
-# tiny-regex-c (public domain) — UTF-8 patched, compiled without strict warnings
-RE_OBJ = ./build/$(PLATFORM)/$(CPU)/re.o
+# tiny-regex-c (public domain) — locally UTF-8 patched; NOT in fetch target to avoid
+# overwriting the patch. Edit vendor/re.c directly if upstream changes are needed.
+RE_OBJ = $(BUILD_DIR)/re.o
+
+VENDOR_OBJS = $(GGUF_OBJS) $(RE_OBJ)
 
 ifeq ($(PLATFORM), Darwin)
 #	the CI/CD doesn't have BLAS so we need to disable it
@@ -38,27 +42,33 @@ else
 	endif
 endif
 
+HASH = $(shell git log --pretty=format:'%h' -n 1)
 
-./build/$(PLATFORM)/$(CPU)/gguflib.o: ./vendor/gguf/gguflib.c ./vendor/gguf/gguflib.h
-	mkdir -p ./build/$(PLATFORM)/$(CPU)/
-	$(CC) -O2 -std=$(STD) \
-	-D_POSIX_C_SOURCE=200809L \
-	$(GGUF_INC) \
-	-c ./vendor/gguf/gguflib.c \
-	-o $@ 
+COMMON_FLAGS = -D_POSIX_C_SOURCE=200809L -DVERSION=\"$(HASH)\" \
+               -I./vendor -I./src $(GGUF_INC)
 
-./build/$(PLATFORM)/$(CPU)/fp16.o: ./vendor/gguf/fp16.c ./vendor/gguf/fp16.h
-	mkdir -p ./build/$(PLATFORM)/$(CPU)/
-	$(CC) -O2 -std=$(STD) \
-	-c ./vendor/gguf/fp16.c \
-	-o $@
+# Sources shared by build, test, and release
+LIB_SRCS = ./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
+           ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c \
+           ./src/cmd.c ./src/tinyregex.c
+
+# App entry points (excluded from test build)
+APP_SRCS = ./src/repl.c ./src/main.c
+TEST_SRC = ./src/test_main.c
+
+$(BUILD_DIR)/gguflib.o: ./vendor/gguf/gguflib.c ./vendor/gguf/gguflib.h
+	mkdir -p $(BUILD_DIR)
+	$(CC) -O2 -std=$(STD) -D_POSIX_C_SOURCE=200809L $(GGUF_INC) \
+		-c ./vendor/gguf/gguflib.c -o $@
+
+$(BUILD_DIR)/fp16.o: ./vendor/gguf/fp16.c ./vendor/gguf/fp16.h
+	mkdir -p $(BUILD_DIR)
+	$(CC) -O2 -std=$(STD) -c ./vendor/gguf/fp16.c -o $@
 
 $(RE_OBJ): ./vendor/re.c ./vendor/re.h
-	mkdir -p ./build/$(PLATFORM)/$(CPU)/
+	mkdir -p $(BUILD_DIR)
 	$(CC) -O2 -std=$(STD) -D_POSIX_C_SOURCE=200809L -I./vendor \
-	-c ./vendor/re.c -o $@
-
-HASH = $(shell git log --pretty=format:'%h' -n 1)
+		-c ./vendor/re.c -o $@
 
 help:
 	@echo "make clean"
@@ -90,59 +100,28 @@ fetch:
 	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/bf16.h    > ./vendor/gguf/bf16.h
 	curl https://raw.githubusercontent.com/antirez/gguf-tools/main/LICENSE   > ./vendor/gguf/LICENSE
 
-
-build: $(GGUF_OBJS) $(RE_OBJ)
-	mkdir -p ./build/$(PLATFORM)/$(CPU)/
-
+build: $(VENDOR_OBJS)
+	mkdir -p $(BUILD_DIR)
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
-		-D_POSIX_C_SOURCE=200809L \
-		-DVERSION=\"$(HASH)\" \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c ./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/tinyregex.c ./src/repl.c ./src/main.c \
-		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
-		$(BLAS_LDFLAGS) \
-		$(GGUF_OBJS) $(RE_OBJ) \
-		-I./vendor \
-		-I./src \
-		$(GGUF_INC) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP).debug -lm $(EDITLINE_LDFLAGS)
+		$(COMMON_FLAGS) $(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
+		$(LIB_SRCS) $(APP_SRCS) \
+		$(VENDOR_OBJS) $(BLAS_LDFLAGS) \
+		-o $(BUILD_DIR)/$(APP).debug -lm $(EDITLINE_LDFLAGS)
 
-test: $(GGUF_OBJS) $(RE_OBJ)
-	mkdir -p ./build/$(PLATFORM)/$(CPU)/
-
+test: $(VENDOR_OBJS)
+	mkdir -p $(BUILD_DIR)
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -ggdb -O2 -std=$(STD) \
-		-D_POSIX_C_SOURCE=200809L \
-		-DVERSION=\"$(HASH)\" \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
-		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/tinyregex.c \
-		./src/test_main.c \
-		$(BLAS_CFLAGS) \
-		$(BLAS_LDFLAGS) \
-		$(GGUF_OBJS) $(RE_OBJ) \
-		-I./vendor \
-		-I./src \
-		$(GGUF_INC) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP).test -lm
+		$(COMMON_FLAGS) $(BLAS_CFLAGS) \
+		$(LIB_SRCS) $(TEST_SRC) \
+		$(VENDOR_OBJS) $(BLAS_LDFLAGS) \
+		-o $(BUILD_DIR)/$(APP).test -lm
+	$(BUILD_DIR)/$(APP).test
 
-	./build/$(PLATFORM)/$(CPU)/$(APP).test
-
-release_cli: $(GGUF_OBJS) $(RE_OBJ)
-	mkdir -p ./build/$(PLATFORM)/$(CPU)/
-
+release_cli: $(VENDOR_OBJS)
+	mkdir -p $(BUILD_DIR)
 	$(CC) $(CUSTOM_CFLAGS) $(C_ERRS) -O3 -march=native -std=$(STD) \
-		-D_POSIX_C_SOURCE=200809L \
-		-DVERSION=\"$(HASH)\" \
-		$(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
-		./src/tinylisp.c ./src/tinytensor.c ./src/tinysymbolic.c \
-		./src/runtime.c ./src/gguf_loader.c ./src/tokenizer.c ./src/cmd.c ./src/tinyregex.c ./src/repl.c ./src/main.c \
-		$(GGUF_OBJS) $(RE_OBJ) \
-		-I./vendor \
-		-I./src \
-		$(GGUF_INC) \
-		$(BLAS_LDFLAGS) \
-		-o ./build/$(PLATFORM)/$(CPU)/$(APP) -lm $(EDITLINE_LDFLAGS)
-
-ifeq ($(PLATFORM), Darwin)
-	otool -L ./build/$(PLATFORM)/$(CPU)/$(APP)
-else
-	ldd ./build/$(PLATFORM)/$(CPU)/$(APP)
-endif
+		$(COMMON_FLAGS) $(BLAS_CFLAGS) $(EDITLINE_CFLAGS) \
+		$(LIB_SRCS) $(APP_SRCS) \
+		$(VENDOR_OBJS) $(BLAS_LDFLAGS) \
+		-o $(BUILD_DIR)/$(APP) -lm $(EDITLINE_LDFLAGS)
+	@if [ "$(PLATFORM)" = "Darwin" ]; then otool -L $(BUILD_DIR)/$(APP); else ldd $(BUILD_DIR)/$(APP); fi
