@@ -50,6 +50,21 @@ static int cmd_help(lisp_state_t *s, const char *args)
     for (int i = 0; i < s->cmd_count; i++)
         printf("  %-10s  %s\n", s->cmds[i].name, s->cmds[i].help);
     printf("\n");
+
+    int col_w = 0;
+    for (int i = 0; i < s->prim_count; i++) {
+        int n = (int)strlen(s->prim[i].s);
+        if (n > col_w) col_w = n;
+    }
+    col_w += 2;
+
+    printf("Primitives:\n");
+    for (int i = 0; i < s->prim_count; i++) {
+        printf("  %-*s", col_w, s->prim[i].s);
+        if ((i + 1) % 3 == 0 || i == s->prim_count - 1)
+            printf("\n");
+    }
+    printf("\n");
     return CMD_CONTINUE;
 }
 
