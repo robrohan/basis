@@ -29,6 +29,16 @@ tensor_t *alloc_tensor(lisp_state_t *s, II rank, const II *shape, II len, const 
     return t;
 }
 
+static inline float apply_opf(float a, float b, char op)
+{
+    switch (op) {
+    case '+': return a + b;
+    case '-': return a - b;
+    case '*': return a * b;
+    default:  return a / b;
+    }
+}
+
 /* helper: apply a scalar op element-wise, or tensor+tensor, returning new tensor */
 L tens_binop(lisp_state_t *s, L a, L b, char op)
 {
@@ -44,56 +54,18 @@ L tens_binop(lisp_state_t *s, L a, L b, char op)
                across every row.  Handles e.g. (@ x W) + bias. */
             if (ta->rank == 2 && tb->rank == 1 && ta->shape[1] == tb->len) {
                 II cols = ta->shape[1];
-                for (i = 0; i < ta->len; i++) {
-                    switch (op) {
-                    case '+': out->data[i] = ta->data[i] + tb->data[i % cols]; break;
-                    case '-': out->data[i] = ta->data[i] - tb->data[i % cols]; break;
-                    case '*': out->data[i] = ta->data[i] * tb->data[i % cols]; break;
-                    case '/': out->data[i] = ta->data[i] / tb->data[i % cols]; break;
-                    }
-                }
+                for (i = 0; i < ta->len; i++)
+                    out->data[i] = apply_opf(ta->data[i], tb->data[i % cols], op);
                 return box(TENS, (II)(out - s->tensor_heap));
             }
             for (i = 0; i < ta->len; i++)
-            {
-                switch (op)
-                {
-                case '+':
-                    out->data[i] = ta->data[i] + tb->data[i];
-                    break;
-                case '-':
-                    out->data[i] = ta->data[i] - tb->data[i];
-                    break;
-                case '*':
-                    out->data[i] = ta->data[i] * tb->data[i];
-                    break;
-                case '/':
-                    out->data[i] = ta->data[i] / tb->data[i];
-                    break;
-                }
-            }
+                out->data[i] = apply_opf(ta->data[i], tb->data[i], op);
         }
         else
         {
             float scalar = (float)b;
             for (i = 0; i < ta->len; i++)
-            {
-                switch (op)
-                {
-                case '+':
-                    out->data[i] = ta->data[i] + scalar;
-                    break;
-                case '-':
-                    out->data[i] = ta->data[i] - scalar;
-                    break;
-                case '*':
-                    out->data[i] = ta->data[i] * scalar;
-                    break;
-                case '/':
-                    out->data[i] = ta->data[i] / scalar;
-                    break;
-                }
-            }
+                out->data[i] = apply_opf(ta->data[i], scalar, op);
         }
         return box(TENS, (II)(out - s->tensor_heap));
     }
@@ -104,36 +76,15 @@ L tens_binop(lisp_state_t *s, L a, L b, char op)
         tensor_t *out = alloc_tensor(s, tb->rank, tb->shape, tb->len, NULL);
         float scalar = (float)a;
         for (i = 0; i < tb->len; i++)
-        {
-            switch (op)
-            {
-            case '+':
-                out->data[i] = scalar + tb->data[i];
-                break;
-            case '-':
-                out->data[i] = scalar - tb->data[i];
-                break;
-            case '*':
-                out->data[i] = scalar * tb->data[i];
-                break;
-            case '/':
-                out->data[i] = scalar / tb->data[i];
-                break;
-            }
-        }
+            out->data[i] = apply_opf(scalar, tb->data[i], op);
         return box(TENS, (II)(out - s->tensor_heap));
     }
-    /* both scalar */
-    switch (op)
-    {
-    case '+':
-        return a + b;
-    case '-':
-        return a - b;
-    case '*':
-        return a * b;
-    case '/':
-        return a / b;
+    /* both scalar — keep as double arithmetic to preserve L (double) precision */
+    switch (op) {
+    case '+': return a + b;
+    case '-': return a - b;
+    case '*': return a * b;
+    case '/': return a / b;
     }
     return s->l_err;
 }
@@ -146,41 +97,19 @@ static L resolve(lisp_state_t *s, L x, L e)
     return T(x) == CONS ? eval(s, x, e) : x;
 }
 
-static L f_add(lisp_state_t *s, L t, L e)
+static L f_arith(lisp_state_t *s, L t, L e, char op)
 {
     t = evlis(s, t, e);
     L n = resolve(s, car(s, t), e);
     while (!is_nil(s, t = cdr(s, t)))
-        n = tens_binop(s, n, resolve(s, car(s, t), e), '+');
+        n = tens_binop(s, n, resolve(s, car(s, t), e), op);
     return num(n);
 }
 
-static L f_sub(lisp_state_t *s, L t, L e)
-{
-    t = evlis(s, t, e);
-    L n = resolve(s, car(s, t), e);
-    while (!is_nil(s, t = cdr(s, t)))
-        n = tens_binop(s, n, resolve(s, car(s, t), e), '-');
-    return num(n);
-}
-
-static L f_mul(lisp_state_t *s, L t, L e)
-{
-    t = evlis(s, t, e);
-    L n = resolve(s, car(s, t), e);
-    while (!is_nil(s, t = cdr(s, t)))
-        n = tens_binop(s, n, resolve(s, car(s, t), e), '*');
-    return num(n);
-}
-
-static L f_div(lisp_state_t *s, L t, L e)
-{
-    t = evlis(s, t, e);
-    L n = resolve(s, car(s, t), e);
-    while (!is_nil(s, t = cdr(s, t)))
-        n = tens_binop(s, n, resolve(s, car(s, t), e), '/');
-    return num(n);
-}
+static L f_add(lisp_state_t *s, L t, L e) { return f_arith(s, t, e, '+'); }
+static L f_sub(lisp_state_t *s, L t, L e) { return f_arith(s, t, e, '-'); }
+static L f_mul(lisp_state_t *s, L t, L e) { return f_arith(s, t, e, '*'); }
+static L f_div(lisp_state_t *s, L t, L e) { return f_arith(s, t, e, '/'); }
 
 /* ---- fast-path dispatch macros for vec2 (len=2) and vec4 (len=4) ----
    vec2 is a union of float[2]; vec4 is a union of float[4].
